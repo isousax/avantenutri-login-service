@@ -130,7 +130,9 @@ export async function registerUser(request: Request, env: Env): Promise<Response
       .run();
 
     // Tokens: access + refresh
-    const accessTokenTtlSeconds = 3600; // 1 hour
+    const accessTokenTtlSeconds = env.JWT_EXPIRATION_SEC
+      ? Number(env.JWT_EXPIRATION_SEC)
+      : 3600;
     console.info("[registerUser] gerando token de acesso");
     const access_token = await generateJWT({ email }, env.JWT_SECRET, accessTokenTtlSeconds);
 

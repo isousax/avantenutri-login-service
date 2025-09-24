@@ -9,14 +9,17 @@ interface RegisterRequestBody {
   full_name: string;
   phone: string;
   birth_date: string;
-  name: string;
 }
 
 interface DBUser {
   id: string;
 }
 
-const JSON_HEADERS = { "Content-Type": "application/json" };
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store",
+  Pragma: "no-cache",
+};
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -44,9 +47,8 @@ export async function registerUser(
   const { email, password, full_name, phone, birth_date } =
     body as RegisterRequestBody;
 
-  // Basic presence validation
   if (!email || !password || !full_name || !phone || !birth_date) {
-    console.warn("[registerUser] malformed request body:", {
+    console.warn("[registerUser] corpo de solicitação malformado: ", {
       missing: [
         !email && "email",
         !password && "password",
@@ -59,12 +61,25 @@ export async function registerUser(
   }
 
   if (!isValidEmail(email)) {
-    console.warn("[registerUser] invalid email format:", email);
+    console.warn("[registerUser] formato de e-mail inválido: ", email);
     return jsonResponse({ error: "Invalid email format" }, 400);
   }
 
+  if (password.length < 8) {
+    console.warn("[registerUser] senha inválida pois é muito curta:");
+    return jsonResponse(
+      { error: "Password must be at least 8 characters" },
+      400
+    );
+  }
+
+  if (isNaN(Date.parse(birth_date))) {
+    console.warn("[registerUser] data de nascimento inválida: ", birth_date);
+    return jsonResponse({ error: "Invalid birth_date format" }, 400);
+  }
+
   if (!env.JWT_SECRET) {
-    console.error("[registerUser] missing JWT_SECRET in env");
+    console.error("[registerUser] JWT_SECRET ausente no ambiente");
     return jsonResponse({ error: "Server misconfiguration" }, 500);
   }
 
@@ -106,15 +121,10 @@ export async function registerUser(
     // Insert user and get id - try to use RETURNING if available, fallback to select.
     // Use a single INSERT then SELECT for compatibility.
     console.info("[registerUser] inserindo usuário na tabela");
-    await env.DB.prepare(
-      "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, 'client', CURRENT_TIMESTAMP)"
+    const user = await env.DB.prepare(
+      "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, 'client', CURRENT_TIMESTAMP) RETURNING id"
     )
       .bind(email, passwordHash)
-      .run();
-
-    // Retrieve inserted user's id
-    const user = await env.DB.prepare("SELECT id FROM users WHERE email = ?")
-      .bind(email)
       .first<DBUser>();
 
     if (!user || !user.id) {
@@ -142,7 +152,7 @@ export async function registerUser(
       : 3600;
     console.info("[registerUser] gerando token de acesso");
     const access_token = await generateJWT(
-      { email, full_name, phone, birth_date },
+      { sub: user.id, email, full_name, phone, birth_date },
       env.JWT_SECRET,
       accessTokenTtlSeconds
     );
@@ -169,7 +179,7 @@ export async function registerUser(
   } catch (err: any) {
     // Detect unique constraint (DB-specific): attempt to match common messages
     const msg = (err && (err.message || String(err))) || "unknown error";
-    console.error("[registerUser] erro ao registrar: git a", {
+    console.error("[registerUser] erro ao registrar: ", {
       email: maskedEmail,
       error: msg,
       stack: err?.stack,

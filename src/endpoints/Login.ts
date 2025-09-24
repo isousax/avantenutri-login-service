@@ -12,6 +12,7 @@ import {
 interface LoginRequestBody {
   email: string;
   password: string;
+  remember: boolean;
 }
 
 interface DBUser {
@@ -53,7 +54,7 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
-  const { email, password } = body as LoginRequestBody;
+  const { email, password, remember } = body as LoginRequestBody;
   if (!email || !password) {
     console.warn("[loginUser] e-mail ou senha ausentes");
     return jsonResponse({ error: "Email and password required" }, 400);
@@ -67,9 +68,11 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "Server misconfiguration" }, 500);
   }
 
-  const refreshDays = env.REFRESH_TOKEN_EXPIRATION_DAYS
-    ? Number(env.REFRESH_TOKEN_EXPIRATION_DAYS)
-    : 30;
+  const refreshDays = remember
+    ? env.REFRESH_TOKEN_EXPIRATION_DAYS
+      ? Number(env.REFRESH_TOKEN_EXPIRATION_DAYS)
+      : 30
+    : 0;
   const clientIp = getClientIp(request);
   const maskedEmail = (() => {
     try {
@@ -169,16 +172,26 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
       expiresIn
     );
 
-    const plainRefresh = await generateRefreshToken(64);
-    const expiresAt = new Date(
-      Date.now() + refreshDays * 24 * 60 * 60 * 1000
-    ).toISOString();
+    let plainRefresh: string | null = null;
+    let expiresAt: string | null = null;
 
-    await createSession(env.DB, user.id, plainRefresh, expiresAt);
+    if (remember) {
+      plainRefresh = await generateRefreshToken(64);
+      expiresAt = new Date(
+        Date.now() + refreshDays * 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      await createSession(env.DB, user.id, plainRefresh, expiresAt);
+    }
 
     console.info("[loginUser] login bem-sucedido para:", maskedEmail);
     return jsonResponse(
-      { access_token, refresh_token: plainRefresh, expires_at: expiresAt },
+      {
+        access_token,
+        ...(remember && plainRefresh
+          ? { refresh_token: plainRefresh, expires_at: expiresAt }
+          : {}),
+      },
       200
     );
   } catch (err: any) {

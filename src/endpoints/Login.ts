@@ -19,6 +19,7 @@ interface DBUser {
   id: string;
   email: string;
   password_hash: string;
+  role: string;
   full_name?: string | null;
   phone?: string | null;
   birth_date?: string | null;
@@ -102,8 +103,8 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
 
     // fetch user + profile
     const user = await env.DB.prepare(
-      `SELECT u.id, u.email, u.email_confirmed, u.password_hash,
-                p.full_name, p.phone, p.birth_date
+      `SELECT u.id, u.email, u.email_confirmed, u.password_hash, u.role
+                p.full_name, p.phone, p.birth_date,
          FROM users u
          LEFT JOIN user_profiles p ON p.user_id = u.id
          WHERE u.email = ?`
@@ -171,6 +172,7 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
       env.JWT_SECRET,
       expiresIn
     );
+    const roles = user.role;
 
     let plainRefresh: string | null = null;
     let expiresAt: string | null = null;
@@ -188,6 +190,7 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
     return jsonResponse(
       {
         access_token,
+        roles,
         ...(remember && plainRefresh
           ? { refresh_token: plainRefresh, expires_at: expiresAt }
           : {}),

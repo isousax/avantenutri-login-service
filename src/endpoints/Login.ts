@@ -108,8 +108,6 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
       .bind(email)
       .first<DBUser>();
 
-    console.log("DEBUG: Select de USER: ", JSON.stringify(user));
-
     if (user && (user as any).email_confirmed !== 1) {
       console.warn(
         "[loginUser] tentativa de login para conta não confirmada:",

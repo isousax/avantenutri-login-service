@@ -2,11 +2,20 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "avantenutri-login-service",
 	"main": "src/index.ts",
-	"compatibility_date": "2025-07-26",
+	"compatibility_date": "2025-09-23",
 	"observability": {
 		"enabled": true
 	},
 	"vars": {
-		"SITE_DNS": "avantenutri.com.br"
-	}
+		"SITE_DNS": "avantenutri.com.br",
+		"JWT_EXPIRATION_SEC": 7.200,
+		"REFRESH_TOKEN_EXPIRATION_DAYS": 30
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "avantenutri_db",
+			"database_id": "a181936f-ca8e-47fa-b3cc-0dc3153e6f69"
+		}
+	],
 }

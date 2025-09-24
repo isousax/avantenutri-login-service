@@ -1,29 +1,52 @@
-import type { D1Database } from "@cloudflare/workers-types";
-import type { R2Bucket } from "@cloudflare/workers-types";
+import { registerUser } from "./endpoints/RegisterUser";
+import { loginUser } from "./endpoints/Login";
+import { refreshTokenHandler } from "./endpoints/Refresh";
+import { logoutHandler } from "./endpoints/Logout";
+import type { Env } from "./types/Env";
 
-export interface Env {
-  SITE_DNS: string;
-  DB: D1Database;
-  R2: R2Bucket;
-  WORKER_API_KEY: string;
+function getCorsHeaders(env: Env) {
+  return {
+    "Access-Control-Allow-Origin": env.SITE_DNS,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
-          "Access-Control-Allow-Headers": "Content-Type",
-        },
-      });
+      return new Response(null, { headers: getCorsHeaders(env) });
     }
 
-    return new Response(
-      JSON.stringify({ status: 404, message: "Not Found." }),
-      { status: 404, headers: { "Content-Type": "application/json" } }
-    );
+    if (request.method === "POST" && url.pathname === "/auth/register") {
+      const res = await registerUser(request, env);
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      return res;
+    }
+
+    if (request.method === "POST" && url.pathname === "/auth/login") {
+      const res = await loginUser(request, env);
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      return res;
+    }
+
+    if (request.method === "POST" && url.pathname === "/auth/refresh") {
+      const res = await refreshTokenHandler(request, env);
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      return res;
+    }
+
+    if (request.method === "POST" && url.pathname === "/auth/logout") {
+      const res = await logoutHandler(request, env);
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      return res;
+    }
+
+    return new Response(JSON.stringify({ error: "Not Found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   },
 };

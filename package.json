@@ -9,6 +9,7 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.2",
     "chanfana": "^2.6.3",
     "hono": "^4.6.20",
     "mercadopago": "^2.8.0",

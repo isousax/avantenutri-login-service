@@ -27,7 +27,10 @@ function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-export async function registerUser(request: Request, env: Env): Promise<Response> {
+export async function registerUser(
+  request: Request,
+  env: Env
+): Promise<Response> {
   console.info("[registerUser] solicitação recebida");
 
   let body: unknown;
@@ -38,13 +41,8 @@ export async function registerUser(request: Request, env: Env): Promise<Response
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
-  const {
-    email,
-    password,
-    full_name,
-    phone,
-    birth_date,
-  } = body as RegisterRequestBody;
+  const { email, password, full_name, phone, birth_date } =
+    body as RegisterRequestBody;
 
   // Basic presence validation
   if (!email || !password || !full_name || !phone || !birth_date) {
@@ -78,7 +76,8 @@ export async function registerUser(request: Request, env: Env): Promise<Response
   const maskedEmail = (() => {
     try {
       const [local, domain] = email.split("@");
-      const visible = local.length > 1 ? local[0] + "..." + local.slice(-1) : local;
+      const visible =
+        local.length > 1 ? local[0] + "..." + local.slice(-1) : local;
       return `${visible}@${domain}`;
     } catch {
       return "unknown";
@@ -89,7 +88,9 @@ export async function registerUser(request: Request, env: Env): Promise<Response
 
   try {
     // Check if user already exists
-    const existing = await env.DB.prepare("SELECT id FROM users WHERE email = ?")
+    const existing = await env.DB.prepare(
+      "SELECT id FROM users WHERE email = ?"
+    )
       .bind(email)
       .first<DBUser>();
 
@@ -117,12 +118,18 @@ export async function registerUser(request: Request, env: Env): Promise<Response
       .first<DBUser>();
 
     if (!user || !user.id) {
-      console.error("[registerUser] failed to retrieve user id after insert for", maskedEmail);
+      console.error(
+        "[registerUser] failed to retrieve user id after insert for",
+        maskedEmail
+      );
       return jsonResponse({ error: "Failed to create user" }, 500);
     }
 
     // Insert user profile (correct binding order)
-    console.info("[registerUser] inserindo perfil de usuário para user_id= ", user.id);
+    console.info(
+      "[registerUser] inserindo perfil de usuário para user_id= ",
+      user.id
+    );
     await env.DB.prepare(
       "INSERT INTO user_profiles (user_id, full_name, phone, birth_date) VALUES (?, ?, ?, ?)"
     )
@@ -134,12 +141,18 @@ export async function registerUser(request: Request, env: Env): Promise<Response
       ? Number(env.JWT_EXPIRATION_SEC)
       : 3600;
     console.info("[registerUser] gerando token de acesso");
-    const access_token = await generateJWT({ email }, env.JWT_SECRET, accessTokenTtlSeconds);
+    const access_token = await generateJWT(
+      { email, full_name, phone, birth_date },
+      env.JWT_SECRET,
+      accessTokenTtlSeconds
+    );
 
     // Create & persist refresh token/session
     console.info("[registerUser] gerando token de atualização");
     const plainRefresh = await generateRefreshToken(64);
-    const expiresAt = new Date(Date.now() + refreshDays * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(
+      Date.now() + refreshDays * 24 * 60 * 60 * 1000
+    ).toISOString();
 
     console.info("[registerUser] criando sessão no DB para user_id= ", user.id);
     await createSession(env.DB, user.id, plainRefresh, expiresAt);
@@ -156,10 +169,16 @@ export async function registerUser(request: Request, env: Env): Promise<Response
   } catch (err: any) {
     // Detect unique constraint (DB-specific): attempt to match common messages
     const msg = (err && (err.message || String(err))) || "unknown error";
-    console.error("[registerUser] erro ao registrar: git a", { email: maskedEmail, error: msg, stack: err?.stack });
+    console.error("[registerUser] erro ao registrar: git a", {
+      email: maskedEmail,
+      error: msg,
+      stack: err?.stack,
+    });
 
     const isUniqueErr =
-      /unique constraint|UNIQUE constraint failed|already exists|duplicate key|unique/i.test(msg);
+      /unique constraint|UNIQUE constraint failed|already exists|duplicate key|unique/i.test(
+        msg
+      );
 
     if (isUniqueErr) {
       return jsonResponse({ error: "User already exists" }, 409);

@@ -41,19 +41,17 @@ export async function registerUser(request: Request, env: Env): Promise<Response
   const {
     email,
     password,
-    name,
     full_name,
     phone,
     birth_date,
   } = body as RegisterRequestBody;
 
   // Basic presence validation
-  if (!email || !password || !name || !full_name || !phone || !birth_date) {
+  if (!email || !password || !full_name || !phone || !birth_date) {
     console.warn("[registerUser] malformed request body:", {
       missing: [
         !email && "email",
         !password && "password",
-        !name && "name",
         !full_name && "full_name",
         !phone && "phone",
         !birth_date && "birth_date",
@@ -126,9 +124,9 @@ export async function registerUser(request: Request, env: Env): Promise<Response
     // Insert user profile (correct binding order)
     console.info("[registerUser] inserindo perfil de usuário para user_id= ", user.id);
     await env.DB.prepare(
-      "INSERT INTO user_profiles (user_id, full_name, phone, birth_date, display_name) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO user_profiles (user_id, full_name, phone, birth_date) VALUES (?, ?, ?, ?)"
     )
-      .bind(user.id, full_name, phone, birth_date, name)
+      .bind(user.id, full_name, phone, birth_date)
       .run();
 
     // Tokens: access + refresh
@@ -156,7 +154,7 @@ export async function registerUser(request: Request, env: Env): Promise<Response
   } catch (err: any) {
     // Detect unique constraint (DB-specific): attempt to match common messages
     const msg = (err && (err.message || String(err))) || "unknown error";
-    console.error("[registerUser] erro ao registrar: ", { email: maskedEmail, error: msg, stack: err?.stack });
+    console.error("[registerUser] erro ao registrar: git a", { email: maskedEmail, error: msg, stack: err?.stack });
 
     const isUniqueErr =
       /unique constraint|UNIQUE constraint failed|already exists|duplicate key|unique/i.test(msg);

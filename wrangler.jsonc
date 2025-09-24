@@ -8,8 +8,9 @@
 	},
 	"vars": {
 		"SITE_DNS": "avantenutri.com.br",
-		"JWT_EXPIRATION_SEC": 7200,
-		"REFRESH_TOKEN_EXPIRATION_DAYS": 30
+		"JWT_EXPIRATION_SEC": 3600,
+		"REFRESH_TOKEN_EXPIRATION_DAYS": 30,
+		"EMAIL_FROM": "AvanteNutri <no-reply@avantenutri.com.br>"
 	},
 	"d1_databases": [
 		{

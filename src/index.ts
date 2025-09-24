@@ -2,8 +2,11 @@ import { registerUser } from "./endpoints/RegisterUser";
 import { loginUser } from "./endpoints/Login";
 import { refreshTokenHandler } from "./endpoints/Refresh";
 import { logoutHandler } from "./endpoints/Logout";
-import {confirmVerificationCode} from "./endpoints/confirmVerificationCode";
-import {resendVerificationCode} from "./endpoints/resendVerificationCode";
+import { confirmVerificationCode } from "./endpoints/confirmVerificationCode";
+import { resendVerificationCode } from "./endpoints/resendVerificationCode";
+import { requestPasswordReset } from "./endpoints/requestPasswordReset";
+import { resetPassword } from "./endpoints/resetPassword";
+
 import type { Env } from "./types/Env";
 
 function getCorsHeaders(env: Env) {
@@ -54,6 +57,18 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/auth/logout") {
       const res = await logoutHandler(request, env);
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      return res;
+    }
+
+    if (request.method === "POST" && url.pathname === "/auth/request-reset") {
+      const res = await requestPasswordReset(request, env);
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      return res;
+    }
+
+    if (request.method === "POST" && url.pathname === "/auth/reset-password") {
+      const res = await resetPassword(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       return res;
     }

@@ -1,5 +1,6 @@
 import { hashPassword } from "../service/managerPassword";
 import { getClientIp, clearAttempts } from "../service/authAttempts";
+import { generateVerificationCode } from "../utils/generateVerificationCode";
 import { sendVerificationEmail } from "../utils/sendVerificationEmail"
 import type { Env } from "../types/Env";
 
@@ -27,13 +28,6 @@ function jsonResponse(body: unknown, status = 200) {
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function generateVerificationCode(length = 6): string {
-  const max = 10 ** length;
-  const rnd = crypto.getRandomValues(new Uint32Array(1))[0] % (max - 10 ** (length - 1));
-  const code = (rnd + 10 ** (length - 1)).toString().padStart(length, "0");
-  return code;
 }
 
 
@@ -179,7 +173,7 @@ export async function registerUser(
 
     console.info("[registerUser] gerando código de verificação");
     const code = generateVerificationCode();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 60 minutos
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
 
     await env.DB.prepare(
       `

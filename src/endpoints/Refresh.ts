@@ -11,6 +11,15 @@ interface RefreshRequestBody {
   refresh_token: string;
 }
 
+interface DBUser {
+  id: string;
+  email: string;
+  password_hash: string;
+  full_name?: string | null;
+  phone?: string | null;
+  birth_date?: string | null;
+}
+
 const JSON_HEADERS = {
   "Content-Type": "application/json",
   "Cache-Control": "no-store",
@@ -73,6 +82,15 @@ export async function refreshTokenHandler(
       return jsonResponse({ error: "Refresh token expired" }, 401);
     }
 
+    const user = await env.DB.prepare(
+      `SELECT p.full_name, p.phone, p.birth_date
+         FROM users u
+         LEFT JOIN user_profiles p ON p.user_id = u.id
+         WHERE u.email = ?`
+    )
+      .bind(session.email)
+      .first<DBUser>();
+
     // Tudo ok: gerar novo access token
     const jwtExp = env.JWT_EXPIRATION_SEC
       ? Number(env.JWT_EXPIRATION_SEC)
@@ -83,7 +101,13 @@ export async function refreshTokenHandler(
       session.user_id
     );
     const access_token = await generateJWT(
-      { userId: session.user_id },
+      {
+        sub: session.user_id,
+        email: session.email ?? undefined,
+        full_name: user.full_name ?? undefined,
+        phone: user.phone ?? undefined,
+        birth_date: user.birth_date ?? undefined,
+      },
       env.JWT_SECRET,
       jwtExp
     );
@@ -94,9 +118,7 @@ export async function refreshTokenHandler(
       : 30;
 
     const newPlain = await generateRefreshToken(64);
-    const newExpires = new Date(
-      Date.now() + refreshDays * 24 * 60 * 60 * 1000
-    ).toISOString();
+    const newExpires = session.expires_at;
 
     console.info(
       "[refreshTokenHandler] sessão rotativa para session_id= ",

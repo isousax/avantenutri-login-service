@@ -1,5 +1,7 @@
-import { generateVerificationCode } from "../utils/generateVerificationCode";
+// handlers/resendVerificationCode.ts
 import type { Env } from "../types/Env";
+import { generateToken } from "../utils/generateToken";
+import { hashToken } from "../utils/hashToken";
 import { sendVerificationEmail } from "../utils/sendVerificationEmail";
 
 const JSON_HEADERS = {
@@ -17,8 +19,8 @@ function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-const RESEND_COOLDOWN_SEC = 60; // 1 minuto entre envios
-const CODE_TTL_MIN = 15; // validade do código em minutos
+const RESEND_COOLDOWN_SEC = 60;
+const TOKEN_TTL_MIN = 15;
 
 export async function resendVerificationCode(request: Request, env: Env): Promise<Response> {
   console.info("[resendVerificationCode] solicitação recebida");
@@ -26,88 +28,68 @@ export async function resendVerificationCode(request: Request, env: Env): Promis
   let body: unknown;
   try {
     body = await request.json();
-  } catch (err) {
-    console.warn("[resendVerificationCode] corpo JSON inválido");
+  } catch {
+    console.warn("[resendVerificationCode] invalid JSON");
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
   const { email } = (body as { email?: string }) || {};
   if (!email || !isValidEmail(email)) {
     console.warn("[resendVerificationCode] e-mail ausente/inválido");
-    // Não vaza se o email existe — resposta genérica
     return jsonResponse({ ok: true }, 200);
   }
 
-  // Resolve user; if not found -> return 200 (no-op) to avoid enumeration
   try {
-    // Find user by email
-    const userRow = await env.DB
-      .prepare("SELECT id, email_confirmed FROM users WHERE email = ?")
-      .bind(email)
-      .first<{ id?: string; email_confirmed?: number }>();
-
+    const userRow = await env.DB.prepare("SELECT id, email_confirmed FROM users WHERE email = ?")
+      .bind(email).first<{ id?: string; email_confirmed?: number }>();
     if (!userRow || !userRow.id) {
-      console.info("[resendVerificationCode] e-mail não encontrado (sem operação) para: ", email.replace(/(.{2}).+(@.+)/, "$1***$2"));
+      console.info("[resendVerificationCode] e-mail não encontrado (no-op)");
       return jsonResponse({ ok: true }, 200);
     }
 
-    const maskedEmail = (() => {
-      try {
-        const [local, domain] = email.split("@");
-        const visible = local.length > 1 ? local[0] + "..." + local.slice(-1) : local;
-        return `${visible}@${domain}`;
-      } catch {
-        return "unknown";
-      }
-    })();
-
-    // If email already confirmed, return 200 (no-op) — don't reveal state
     if (userRow.email_confirmed) {
-      console.info("[resendVerificationCode] e-mail já confirmado (sem operação) para: ", maskedEmail);
+      console.info("[resendVerificationCode] email already confirmed (no-op)");
       return jsonResponse({ ok: true }, 200);
     }
 
-    // Check cooldown: look at created_at of existing row (if any)
-    const existing = await env.DB
-      .prepare("SELECT created_at FROM email_verification_codes WHERE user_id = ?")
-      .bind(userRow.id)
-      .first<{ created_at?: string }>();
-
+    // cooldown check
+    const existing = await env.DB.prepare("SELECT created_at FROM email_verification_codes WHERE user_id = ?")
+      .bind(userRow.id).first<{ created_at?: string }>();
     const nowMs = Date.now();
     if (existing && existing.created_at) {
-      const lastSentMs = Date.parse(existing.created_at);
-      if (!isNaN(lastSentMs)) {
-        const diffSec = Math.floor((nowMs - lastSentMs) / 1000);
+      const lastMs = Date.parse(existing.created_at);
+      if (!isNaN(lastMs)) {
+        const diffSec = Math.floor((nowMs - lastMs) / 1000);
         if (diffSec < RESEND_COOLDOWN_SEC) {
           const retryAfter = RESEND_COOLDOWN_SEC - diffSec;
-          console.warn("[resendVerificationCode] reenviar cooldown ativo para: ", maskedEmail, "retryAfterSec:", retryAfter);
           return jsonResponse({ error: "Too many requests. Try again later." }, 429, { "Retry-After": String(retryAfter) });
         }
       }
     }
 
-    // Generate new code and upsert into email_verification_codes
-    const code = generateVerificationCode(6);
-    const expiresAt = new Date(nowMs + CODE_TTL_MIN * 60_000).toISOString();
+    // generate token, hash, upsert
+    const plainToken = generateToken(32);
+    const tokenHash = await hashToken(plainToken);
+    const expiresAt = new Date(nowMs + TOKEN_TTL_MIN * 60_000).toISOString();
 
-    // Upsert: INSERT ... ON CONFLICT(user_id) DO UPDATE SET ...
     await env.DB.prepare(
-      `INSERT INTO email_verification_codes (user_id, code, expires_at, created_at)
-       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      `INSERT INTO email_verification_codes (user_id, token_hash, expires_at, created_at, used)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP, 0)
        ON CONFLICT(user_id) DO UPDATE SET
-         code = excluded.code,
+         token_hash = excluded.token_hash,
          expires_at = excluded.expires_at,
-         created_at = CURRENT_TIMESTAMP`
-    ).bind(userRow.id, code, expiresAt).run();
+         created_at = CURRENT_TIMESTAMP,
+         used = 0`
+    ).bind(userRow.id, tokenHash, expiresAt).run();
 
-    console.info("[resendVerificationCode] enviando e-mail de verificação para: ", maskedEmail);
-    // sendVerificationEmail throws on failure — let it bubble to be handled below
-    await sendVerificationEmail(env, email, code);
+    // build link and send
+    const base = (env.SITE_DNS || "").replace(/\/$/, "");
+    const link = `${base}/confirm-email?token=${encodeURIComponent(plainToken)}`;
+    await sendVerificationEmail(env, email, link);
 
-    console.info("[resendVerificationCode] e-mail enviado (ok) para: ", maskedEmail);
+    console.info("[resendVerificationCode] e-mail enviado (ok) para:", email);
     return jsonResponse({ ok: true }, 200);
   } catch (err: any) {
-    // In case of transient failures (email provider down), return 500 so client can retry
     console.error("[resendVerificationCode] unexpected error:", err?.message ?? err, err?.stack);
     return jsonResponse({ error: "Internal Server Error" }, 500);
   }

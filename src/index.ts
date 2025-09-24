@@ -2,7 +2,7 @@ import { registerUser } from "./endpoints/RegisterUser";
 import { loginUser } from "./endpoints/Login";
 import { refreshTokenHandler } from "./endpoints/Refresh";
 import { logoutHandler } from "./endpoints/Logout";
-import { confirmVerificationCode } from "./endpoints/confirmVerificationCode";
+import { confirmVerificationToken } from "./endpoints/confirmVerificationToken";
 import { resendVerificationCode } from "./endpoints/resendVerificationCode";
 import { requestPasswordReset } from "./endpoints/requestPasswordReset";
 import { resetPassword } from "./endpoints/resetPassword";
@@ -32,7 +32,7 @@ export default {
     }
 
     if (request.method === "POST" && url.pathname === "/auth/confirm-code") {
-      const res = await confirmVerificationCode(request, env);
+      const res = await confirmVerificationToken(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       return res;
     }

@@ -1,22 +1,19 @@
 import type { Env } from "../types/Env";
 
-export async function sendPasswordResetEmail(env: Env, to: string, code: string) {
+export async function sendPasswordResetEmail(env: Env, to: string, link: string) {
   const apiKey = env.BREVO_API_KEY;
   const from = env.EMAIL_FROM;
-
   if (!apiKey || !from) {
-    console.warn("[sendPasswordResetEmail] BREVO_API_KEY or EMAIL_FROM missing");
+    console.warn("[sendPasswordResetEmail] BREVO_API_KEY ou EMAIL_FROM ausente");
     return;
   }
 
-  const CODE_TTL_MIN = 15;
-  const subject = "Recuperação de senha — Avante Nutri";
+  const subject = "Redefinição de senha - Avante Nutri";
   const html = `
     <p>Olá,</p>
-    <p>Você solicitou redefinir sua senha. Use o código abaixo para continuar:</p>
-    <h2>${code}</h2>
-    <p>Esse código expira em ${CODE_TTL_MIN} minutos.</p>
-    <p>Se você não solicitou essa ação, ignore este e-mail.</p>
+    <p>Foi solicitada a redefinição de senha para sua conta. Clique no link abaixo para continuar:</p>
+    <p><a href="${link}">${link}</a></p>
+    <p>O link expira em alguns minutos. Se você não solicitou, ignore este email.</p>
   `;
 
   const sender = parseSender(from);
@@ -26,7 +23,8 @@ export async function sendPasswordResetEmail(env: Env, to: string, code: string)
     subject,
     htmlContent: html,
   };
-  if (env.EMAIL_REPLY_TO) payload['replyTo'] = { email: env.EMAIL_REPLY_TO };
+
+  if (env.EMAIL_REPLY_TO) payload.replyTo = { email: env.EMAIL_REPLY_TO };
 
   const res = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
@@ -38,13 +36,13 @@ export async function sendPasswordResetEmail(env: Env, to: string, code: string)
   });
 
   if (!res.ok) {
-    const bodyText = await res.text().catch(()=>"");
-    throw new Error(`Failed to send password reset email (${res.status}): ${bodyText}`);
+    const bodyText = await res.text().catch(() => "");
+    throw new Error(`Falha ao enviar email (${res.status}): ${bodyText}`);
   }
 }
 
 function parseSender(from: string) {
   const m = from.match(/^(.*)<(.+@.+)>$/);
-  if (m) return { name: m[1].trim().replace(/(^"|"$)/g, ''), email: m[2].trim() };
-  return { name: 'Avante Nutri', email: from.trim() };
+  if (m) return { name: m[1].trim().replace(/(^"|"$)/g, ""), email: m[2].trim() };
+  return { name: "Avante Nutri", email: from.trim() };
 }

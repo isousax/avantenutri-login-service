@@ -1,4 +1,5 @@
 import type { Env } from "../types/Env";
+import { hashToken } from "../utils/hashToken";
 import { hashPassword } from "../service/managerPassword";
 import { clearAttempts } from "../service/authAttempts";
 
@@ -12,126 +13,87 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
 const PASSWORD_POLICY_REGEX =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
 
 export async function resetPassword(request: Request, env: Env): Promise<Response> {
   console.info("[resetPassword] request received");
 
-  if (!env.JWT_SECRET) {
-    console.error("[resetPassword] JWT_SECRET missing");
-    return jsonResponse({ error: "Server misconfiguration" }, 500);
-  }
-
   let body: unknown;
   try {
     body = await request.json();
-  } catch (err) {
+  } catch {
     console.warn("[resetPassword] invalid JSON");
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
-  const { email, user_id, code, new_password } = (body as {
-    email?: string;
-    user_id?: string;
-    code?: string;
-    new_password?: string;
-  }) || {};
+  const { token, new_password } = (body as { token?: string; new_password?: string }) || {};
 
-  if (!code || !new_password || (!email && !user_id)) {
-    console.warn("[resetPassword] missing fields");
-    return jsonResponse({ error: "code and new_password and (email or user_id) required" }, 400);
+  if (!token || !new_password) {
+    return jsonResponse({ error: "token and new_password required" }, 400);
   }
 
   if (!PASSWORD_POLICY_REGEX.test(new_password)) {
     return jsonResponse({ error: "Password must be at least 8 characters and include lowercase, uppercase, number and symbol" }, 400);
   }
 
-  // Resolve user id if email provided
   try {
-    // resolve user by id or email
-    let userRow: { id: string; email?: string } | null = null;
-    if (user_id) {
-      const r = await env.DB.prepare("SELECT id, email FROM users WHERE id = ?").bind(user_id).first<{ id?: string; email?: string }>();
-      if (r && r.id) userRow = { id: r.id, email: r.email };
-    } else {
-      if (!isValidEmail(email!)) {
-        return jsonResponse({ error: "Invalid input" }, 400);
-      }
-      const r = await env.DB.prepare("SELECT id, email FROM users WHERE email = ?").bind(email).first<{ id?: string; email?: string }>();
-      if (r && r.id) userRow = { id: r.id, email: r.email };
+    const tokenHash = await hashToken(token);
+
+    // find by token_hash
+    const row = await env.DB.prepare("SELECT user_id, expires_at, used FROM password_reset_codes WHERE token_hash = ?")
+      .bind(tokenHash)
+      .first<{ user_id?: string; expires_at?: string; used?: number }>();
+
+    if (!row || !row.user_id) {
+      console.warn("[resetPassword] token not found");
+      return jsonResponse({ error: "Invalid or expired token" }, 401);
+    }
+    if (Number(row.used) === 1) {
+      console.warn("[resetPassword] token already used");
+      return jsonResponse({ error: "Invalid or expired token" }, 401);
     }
 
-    if (!userRow) {
-      // generic response to avoid enumeration
-      console.warn("[resetPassword] user not found (generic)");
-      return jsonResponse({ error: "Invalid code or user" }, 401);
+    const expiresMs = Date.parse(row.expires_at || "");
+    if (isNaN(expiresMs) || expiresMs < Date.now()) {
+      console.warn("[resetPassword] token expired");
+      return jsonResponse({ error: "Invalid or expired token" }, 401);
     }
 
-    const maskedEmail = (() => {
-      try {
-        const e = userRow.email || "";
-        const [local, domain] = e.split("@");
-        const visible = local && local.length > 1 ? local[0] + "..." + local.slice(-1) : local;
-        return `${visible}@${domain}`;
-      } catch {
-        return "unknown";
-      }
-    })();
-
-    // fetch reset code
-    const codeRow = await env.DB
-      .prepare("SELECT code, expires_at FROM password_reset_codes WHERE user_id = ?")
-      .bind(userRow.id)
-      .first<{ code?: string; expires_at?: string }>();
-
-    if (!codeRow || !codeRow.code) {
-      console.warn("[resetPassword] no reset row for user:", maskedEmail);
-      return jsonResponse({ error: "Invalid or expired code" }, 401);
-    }
-
-    const nowMs = Date.now();
-    const expiresMs = Date.parse(codeRow.expires_at || "");
-    if (codeRow.code !== code || isNaN(expiresMs) || expiresMs < nowMs) {
-      console.warn("[resetPassword] code invalid/expired for user:", maskedEmail);
-      return jsonResponse({ error: "Invalid or expired code" }, 401);
-    }
-
-    // hash new password
+    // hash new password and update user
     const newHash = await hashPassword(new_password);
-
-    // update user's password
     await env.DB.prepare("UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-      .bind(newHash, userRow.id)
+      .bind(newHash, row.user_id)
       .run();
 
-    // delete reset code (cleanup)
+    // mark token used
     try {
-      await env.DB.prepare("DELETE FROM password_reset_codes WHERE user_id = ?").bind(userRow.id).run();
-    } catch (delErr) {
-      console.warn("[resetPassword] falha ao deletar código de reset (não fatal):", delErr);
+      await env.DB.prepare("UPDATE password_reset_codes SET used = 1, used_at = CURRENT_TIMESTAMP WHERE token_hash = ?")
+        .bind(tokenHash)
+        .run();
+    } catch (e) {
+      console.warn("[resetPassword] failed to mark token used (non-fatal):", e);
     }
 
-    // revoke sessions for user (mark revoked) - non-fatal
+    // revoke sessions for user (non-fatal)
     try {
-      await env.DB.prepare("UPDATE user_sessions SET revoked = 1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?").bind(userRow.id).run();
+      await env.DB.prepare("UPDATE user_sessions SET revoked = 1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?")
+        .bind(row.user_id)
+        .run();
     } catch (revErr) {
       console.warn("[resetPassword] revoke sessions failed (non-fatal):", revErr);
     }
 
-    // clear attempts (non-fatal)
+    // clear attempts (non-fatal) - try to resolve user email for better clearAttempts call
     try {
+      const userRow = await env.DB.prepare("SELECT email FROM users WHERE id = ?").bind(row.user_id).first<{ email?: string }>();
       const clientIp = (request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown");
-      await clearAttempts(env.DB, userRow.email || "", clientIp);
+      await clearAttempts(env.DB, userRow?.email ?? "", clientIp);
     } catch (clearErr) {
       console.warn("[resetPassword] clearAttempts failed (non-fatal):", clearErr);
     }
 
-    console.info("[resetPassword] password reset OK for user:", maskedEmail);
+    console.info("[resetPassword] password reset OK for user_id:", row.user_id);
     return jsonResponse({ ok: true }, 200);
   } catch (err: any) {
     console.error("[resetPassword] unexpected error:", err?.message ?? err, err?.stack);

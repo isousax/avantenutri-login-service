@@ -29,10 +29,10 @@ function jsonResponse(body: unknown, status = 200, extra?: Record<string, string
 }
 
 export async function confirmVerificationCode(request: Request, env: Env): Promise<Response> {
-  console.info("[confirmVerificationCode] request received");
+  console.info("[confirmVerificationCode] solicitação recebida");
 
   if (!env.JWT_SECRET) {
-    console.error("[confirmVerificationCode] JWT_SECRET missing in env");
+    console.error("[confirmVerificationCode] JWT_SECRET ausente no ambiente");
     return jsonResponse({ error: "Server misconfiguration" }, 500);
   }
 
@@ -40,13 +40,13 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
   try {
     body = await request.json();
   } catch (err) {
-    console.warn("[confirmVerificationCode] invalid JSON body");
+    console.warn("[confirmVerificationCode] corpo JSON inválido");
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
   const { user_id, email, code } = body as ConfirmRequestBody;
   if (!code || (!user_id && !email)) {
-    console.warn("[confirmVerificationCode] missing required fields");
+    console.warn("[confirmVerificationCode] campos obrigatórios ausentes");
     return jsonResponse({ error: "code and (user_id or email) required" }, 400);
   }
 
@@ -71,7 +71,7 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
     // If user not found -> generic invalid (do not leak)
     if (!userRow) {
       await env.DB.prepare("ROLLBACK").run().catch(() => {});
-      console.warn("[confirmVerificationCode] user not found (generic response)");
+      console.warn("[confirmVerificationCode] usuário não encontrado (resposta genérica)");
       return jsonResponse({ error: "Invalid or expired code" }, 401);
     }
 
@@ -93,7 +93,7 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
 
     if (!codeRow || !codeRow.code) {
       await env.DB.prepare("ROLLBACK").run().catch(() => {});
-      console.warn("[confirmVerificationCode] verification row missing for user:", maskedEmail);
+      console.warn("[confirmVerificationCode] linha de verificação ausente para o usuário: ", maskedEmail);
       return jsonResponse({ error: "Invalid or expired code" }, 401);
     }
 
@@ -102,7 +102,7 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
     const expiresMs = Date.parse(codeRow.expires_at || "");
     if (codeRow.code !== code || isNaN(expiresMs) || expiresMs < nowMs) {
       await env.DB.prepare("ROLLBACK").run().catch(() => {});
-      console.warn("[confirmVerificationCode] code invalid or expired for user:", maskedEmail);
+      console.warn("[confirmVerificationCode] código inválido ou expirado para o usuário: ", maskedEmail);
       return jsonResponse({ error: "Invalid or expired code" }, 401);
     }
 
@@ -132,7 +132,7 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
     if (!userFull || !userFull.id) {
       // unexpected — rollback
       await env.DB.prepare("ROLLBACK").run().catch(() => {});
-      console.error("[confirmVerificationCode] failed to load user after confirm:", userRow.id);
+      console.error("[confirmVerificationCode] falha ao carregar usuário após confirmação: ", userRow.id);
       return jsonResponse({ error: "Internal Server Error" }, 500);
     }
 
@@ -166,10 +166,10 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
       const clientIp = getClientIp(request);
       await clearAttempts(env.DB, userFull.email, clientIp);
     } catch (err) {
-      console.warn("[confirmVerificationCode] clearAttempts failed (non-fatal):", err);
+      console.warn("[confirmVerificationCode] clearAttempts falhou (não fatal): ", err);
     }
 
-    console.info("[confirmVerificationCode] verification OK & session created for user:", maskedEmail);
+    console.info("[confirmVerificationCode] verificação OK e sessão criada para o usuário: ", maskedEmail);
     return jsonResponse(
       {
         access_token,
@@ -184,7 +184,7 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
     try {
       await env.DB.prepare("ROLLBACK").run();
     } catch (rbErr) {
-      console.error("[confirmVerificationCode] rollback failed:", rbErr);
+      console.error("[confirmVerificationCode] falha na reversão: ", rbErr);
     }
     console.error("[confirmVerificationCode] unexpected error:", err?.message ?? err, err?.stack);
     return jsonResponse({ error: "Internal Server Error" }, 500);

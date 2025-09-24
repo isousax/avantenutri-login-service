@@ -2,6 +2,8 @@ import { registerUser } from "./endpoints/RegisterUser";
 import { loginUser } from "./endpoints/Login";
 import { refreshTokenHandler } from "./endpoints/Refresh";
 import { logoutHandler } from "./endpoints/Logout";
+import {confirmVerificationCode} from "./endpoints/confirmVerificationCode";
+import {resendVerificationCode} from "./endpoints/resendVerificationCode";
 import type { Env } from "./types/Env";
 
 function getCorsHeaders(env: Env) {
@@ -22,6 +24,18 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/auth/register") {
       const res = await registerUser(request, env);
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      return res;
+    }
+
+    if (request.method === "POST" && url.pathname === "/auth/confirm-code") {
+      const res = await confirmVerificationCode(request, env);
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      return res;
+    }
+
+    if (request.method === "POST" && url.pathname === "/auth/resend-code") {
+      const res = await resendVerificationCode(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       return res;
     }

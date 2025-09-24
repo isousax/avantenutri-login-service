@@ -51,26 +51,23 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
   }
 
   try {
-    await env.DB.prepare("BEGIN").run();
-
-    let userRow: { id: string; email: string } | null = null;
+    // Resolve user by id or email
+    let userRow: { id: string; email: string; email_confirmed?: number } | null = null;
     if (user_id) {
       const r = await env.DB
-        .prepare("SELECT id, email FROM users WHERE id = ?")
+        .prepare("SELECT id, email, email_confirmed FROM users WHERE id = ?")
         .bind(user_id)
-        .first<{ id?: string; email?: string }>();
-      if (r && r.id) userRow = { id: r.id, email: r.email ?? "" };
+        .first<{ id?: string; email?: string; email_confirmed?: number }>();
+      if (r && r.id) userRow = { id: r.id, email: r.email ?? "", email_confirmed: r.email_confirmed };
     } else {
       const r = await env.DB
-        .prepare("SELECT id, email FROM users WHERE email = ?")
+        .prepare("SELECT id, email, email_confirmed FROM users WHERE email = ?")
         .bind(email)
-        .first<{ id?: string; email?: string }>();
-      if (r && r.id) userRow = { id: r.id, email: r.email ?? "" };
+        .first<{ id?: string; email?: string; email_confirmed?: number }>();
+      if (r && r.id) userRow = { id: r.id, email: r.email ?? "", email_confirmed: r.email_confirmed };
     }
 
-    // If user not found -> generic invalid (do not leak)
     if (!userRow) {
-      await env.DB.prepare("ROLLBACK").run().catch(() => {});
       console.warn("[confirmVerificationCode] usuário não encontrado (resposta genérica)");
       return jsonResponse({ error: "Invalid or expired code" }, 401);
     }
@@ -85,6 +82,13 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
       }
     })();
 
+    // If already confirmed, be idempotent and return OK without issuing tokens.
+    if (Number(userRow.email_confirmed) === 1) {
+      console.info("[confirmVerificationCode] conta já confirmada (idempotente) para:", maskedEmail);
+      // Optionally front can then prompt user to login instead of issuing token here.
+      return jsonResponse({ ok: true, already_confirmed: true }, 200);
+    }
+
     // Fetch verification code row
     const codeRow = await env.DB
       .prepare("SELECT code, expires_at FROM email_verification_codes WHERE user_id = ?")
@@ -92,8 +96,7 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
       .first<{ code?: string; expires_at?: string }>();
 
     if (!codeRow || !codeRow.code) {
-      await env.DB.prepare("ROLLBACK").run().catch(() => {});
-      console.warn("[confirmVerificationCode] linha de verificação ausente para o usuário: ", maskedEmail);
+      console.warn("[confirmVerificationCode] linha de verificação ausente para o usuário:", maskedEmail);
       return jsonResponse({ error: "Invalid or expired code" }, 401);
     }
 
@@ -101,22 +104,31 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
     const nowMs = Date.now();
     const expiresMs = Date.parse(codeRow.expires_at || "");
     if (codeRow.code !== code || isNaN(expiresMs) || expiresMs < nowMs) {
-      await env.DB.prepare("ROLLBACK").run().catch(() => {});
-      console.warn("[confirmVerificationCode] código inválido ou expirado para o usuário: ", maskedEmail);
+      console.warn("[confirmVerificationCode] código inválido ou expirado para o usuário:", maskedEmail);
       return jsonResponse({ error: "Invalid or expired code" }, 401);
     }
 
     // Mark user as confirmed
-    await env.DB
-      .prepare("UPDATE users SET email_confirmed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-      .bind(userRow.id)
-      .run();
+    try {
+      await env.DB
+        .prepare("UPDATE users SET email_confirmed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+        .bind(userRow.id)
+        .run();
+    } catch (upErr) {
+      console.error("[confirmVerificationCode] falha ao marcar usuário como confirmado:", upErr);
+      return jsonResponse({ error: "Internal Server Error" }, 500);
+    }
 
     // Delete verification code (cleanup)
-    await env.DB
-      .prepare("DELETE FROM email_verification_codes WHERE user_id = ?")
-      .bind(userRow.id)
-      .run();
+    try {
+      await env.DB
+        .prepare("DELETE FROM email_verification_codes WHERE user_id = ?")
+        .bind(userRow.id)
+        .run();
+    } catch (delErr) {
+      // non-fatal: log and continue
+      console.warn("[confirmVerificationCode] falha ao deletar codigo de verificação (não fatal):", delErr);
+    }
 
     // Fetch user + profile (for token payload)
     const userFull = await env.DB
@@ -130,9 +142,7 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
       .first<DBUser>();
 
     if (!userFull || !userFull.id) {
-      // unexpected — rollback
-      await env.DB.prepare("ROLLBACK").run().catch(() => {});
-      console.error("[confirmVerificationCode] falha ao carregar usuário após confirmação: ", userRow.id);
+      console.error("[confirmVerificationCode] falha ao carregar usuário após confirmação:", userRow.id);
       return jsonResponse({ error: "Internal Server Error" }, 500);
     }
 
@@ -156,20 +166,22 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
     const plainRefresh = await generateRefreshToken(64);
     const expiresAt = new Date(Date.now() + refreshDays * 24 * 60 * 60 * 1000).toISOString();
 
-    await createSession(env.DB, userFull.id, plainRefresh, expiresAt);
-
-    // Commit transaction
-    await env.DB.prepare("COMMIT").run();
+    try {
+      await createSession(env.DB, userFull.id, plainRefresh, expiresAt);
+    } catch (sessErr) {
+      console.error("[confirmVerificationCode] falha ao criar sessão:", sessErr);
+      return jsonResponse({ error: "Internal Server Error" }, 500);
+    }
 
     // Clear attempts (non-fatal)
     try {
       const clientIp = getClientIp(request);
       await clearAttempts(env.DB, userFull.email, clientIp);
     } catch (err) {
-      console.warn("[confirmVerificationCode] clearAttempts falhou (não fatal): ", err);
+      console.warn("[confirmVerificationCode] clearAttempts falhou (não fatal):", err);
     }
 
-    console.info("[confirmVerificationCode] verificação OK e sessão criada para o usuário: ", maskedEmail);
+    console.info("[confirmVerificationCode] verificação OK e sessão criada para o usuário:", maskedEmail);
     return jsonResponse(
       {
         access_token,
@@ -180,12 +192,6 @@ export async function confirmVerificationCode(request: Request, env: Env): Promi
       200
     );
   } catch (err: any) {
-    // Attempt rollback
-    try {
-      await env.DB.prepare("ROLLBACK").run();
-    } catch (rbErr) {
-      console.error("[confirmVerificationCode] falha na reversão: ", rbErr);
-    }
     console.error("[confirmVerificationCode] unexpected error:", err?.message ?? err, err?.stack);
     return jsonResponse({ error: "Internal Server Error" }, 500);
   }

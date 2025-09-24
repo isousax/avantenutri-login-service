@@ -1,7 +1,8 @@
+// handlers/registerUser.ts
 import { hashPassword } from "../service/managerPassword";
 import { getClientIp, clearAttempts } from "../service/authAttempts";
 import { generateVerificationCode } from "../utils/generateVerificationCode";
-import { sendVerificationEmail } from "../utils/sendVerificationEmail"
+import { sendVerificationEmail } from "../utils/sendVerificationEmail";
 import type { Env } from "../types/Env";
 
 interface RegisterRequestBody {
@@ -30,18 +31,11 @@ function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-
-// E.164 basic validation
 const PHONE_E164_REGEX = /^\+?[1-9]\d{1,14}$/;
+const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+const CODE_TTL_MIN = 15;
 
-// Password policy: min 8 chars, at least one lower, one upper, one digit and one symbol
-const PASSWORD_POLICY_REGEX =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
-
-export async function registerUser(
-  request: Request,
-  env: Env
-): Promise<Response> {
+export async function registerUser(request: Request, env: Env): Promise<Response> {
   console.info("[registerUser] solicitação recebida");
 
   let body: unknown;
@@ -52,183 +46,118 @@ export async function registerUser(
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
-  const { email, password, full_name, phone, birth_date } =
-    body as RegisterRequestBody;
+  const { email, password, full_name, phone, birth_date } = body as RegisterRequestBody;
 
   if (!email || !password || !full_name || !phone || !birth_date) {
-    console.warn("[registerUser] corpo de solicitação malformado: ", {
-      missing: [
-        !email && "email",
-        !password && "password",
-        !full_name && "full_name",
-        !phone && "phone",
-        !birth_date && "birth_date",
-      ].filter(Boolean),
-    });
+    console.warn("[registerUser] corpo de solicitação malformado");
     return jsonResponse({ error: "Malformed request body" }, 400);
   }
-
   if (!isValidEmail(email)) {
-    console.warn("[registerUser] formato de e-mail inválido: ", email);
+    console.warn("[registerUser] formato de e-mail inválido:", email);
     return jsonResponse({ error: "Invalid email format" }, 400);
   }
-
   if (!PASSWORD_POLICY_REGEX.test(password)) {
     console.warn("[registerUser] senha não atende à política de segurança");
     return jsonResponse(
-      {
-        error:
-          "Password must be at least 8 characters and include lowercase, uppercase, number and symbol",
-      },
+      { error: "Password must be at least 8 characters and include lowercase, uppercase, number and symbol" },
       400
     );
   }
-
   if (isNaN(Date.parse(birth_date))) {
-    console.warn("[registerUser] data de nascimento inválida: ", birth_date);
+    console.warn("[registerUser] data de nascimento inválida:", birth_date);
     return jsonResponse({ error: "Invalid birth_date format" }, 400);
   }
-
   if (!PHONE_E164_REGEX.test(phone)) {
-    console.warn("[registerUser] telefone inválido (esperado E.164): ", phone);
-    return jsonResponse(
-      { error: "Invalid phone format (expected E.164, e.g. +5511999999999)" },
-      400
-    );
+    console.warn("[registerUser] telefone inválido (esperado E.164):", phone);
+    return jsonResponse({ error: "Invalid phone format (expected E.164, e.g. +5511999999999)" }, 400);
   }
-
   if (!env.JWT_SECRET) {
     console.error("[registerUser] JWT_SECRET ausente no ambiente");
     return jsonResponse({ error: "Server misconfiguration" }, 500);
   }
 
-  const refreshDays = env.REFRESH_TOKEN_EXPIRATION_DAYS
-    ? Number(env.REFRESH_TOKEN_EXPIRATION_DAYS)
-    : 30;
-
-  // Do not log the full email + password pair. Log only non-sensitive info.
   const maskedEmail = (() => {
     try {
       const [local, domain] = email.split("@");
-      const visible =
-        local.length > 1 ? local[0] + "..." + local.slice(-1) : local;
+      const visible = local.length > 1 ? local[0] + "..." + local.slice(-1) : local;
       return `${visible}@${domain}`;
     } catch {
       return "unknown";
     }
   })();
 
-  console.info("[registerUser] registrando: ", maskedEmail);
+  console.info("[registerUser] registrando:", maskedEmail);
 
-  // Transactional flow: BEGIN -> checks/inserts -> COMMIT (ROLLBACK on error)
+  // --- create user (non-transactional, but using INSERT ... RETURNING) ---
+  let createdUser: DBUser | null = null;
   try {
-    console.info("[registerUser] BEGIN transaction");
-    await env.DB.prepare("BEGIN").run();
-
-    // Check if user already exists (inside transaction to avoid races)
-    const existing = await env.DB.prepare(
-      "SELECT id FROM users WHERE email = ?"
-    )
-      .bind(email)
-      .first<DBUser>();
-
-    if (existing && existing.id) {
-      console.info("[registerUser] o usuário já existe: ", maskedEmail);
-      await env.DB.prepare("ROLLBACK")
-        .run()
-        .catch(() => {});
-      return jsonResponse({ error: "User already exists" }, 409);
-    }
-
-    console.info("[registerUser] hash de senha para: ", maskedEmail);
     const passwordHash = await hashPassword(password);
 
-    console.info("[registerUser] inserindo usuário na tabela (RETURNING id)");
-    const user = await env.DB.prepare(
-      "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, 'client', CURRENT_TIMESTAMP) RETURNING id"
-    )
+    const userRow = await env.DB
+      .prepare(
+        "INSERT INTO users (email, password_hash, role, created_at, email_confirmed) VALUES (?, ?, 'client', CURRENT_TIMESTAMP, 0) RETURNING id"
+      )
       .bind(email, passwordHash)
       .first<DBUser>();
 
-    if (!user || !user.id) {
-      console.error(
-        "[registerUser] failed to retrieve user id after insert for",
-        maskedEmail
-      );
-      await env.DB.prepare("ROLLBACK")
-        .run()
-        .catch(() => {});
+    if (!userRow || !userRow.id) {
+      console.error("[registerUser] failed to retrieve user id after insert");
       return jsonResponse({ error: "Failed to create user" }, 500);
     }
+    createdUser = userRow;
 
-    console.info(
-      "[registerUser] inserindo perfil de usuário para user_id= ",
-      user.id
-    );
-    await env.DB.prepare(
-      "INSERT INTO user_profiles (user_id, full_name, phone, birth_date) VALUES (?, ?, ?, ?)"
-    )
-      .bind(user.id, full_name, phone, birth_date)
+    // insert profile
+    await env.DB
+      .prepare("INSERT INTO user_profiles (user_id, full_name, phone, birth_date) VALUES (?, ?, ?, ?)")
+      .bind(createdUser.id, full_name, phone, birth_date)
       .run();
 
-    console.info("[registerUser] gerando código de verificação");
+    // create verification code (upsert)
     const code = generateVerificationCode();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
+    const expiresAt = new Date(Date.now() + CODE_TTL_MIN * 60 * 1000).toISOString();
 
-    await env.DB.prepare(
-      `
-    INSERT INTO email_verification_codes (user_id, code, expires_at)
-    VALUES (?, ?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET
-    code = excluded.code,
-    expires_at = excluded.expires_at
-    `
-    )
-      .bind(user.id, code, expiresAt)
+    await env.DB
+      .prepare(
+        `INSERT INTO email_verification_codes (user_id, code, expires_at, created_at)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(user_id) DO UPDATE SET code = excluded.code, expires_at = excluded.expires_at, created_at = CURRENT_TIMESTAMP`
+      )
+      .bind(createdUser.id, code, expiresAt)
       .run();
 
-    console.info("[registerUser] enviando e-mail de verificação");
-    await sendVerificationEmail(env, email, code);
-
-    // All good => commit
-    console.info("[registerUser] COMMIT transaction");
-    await env.DB.prepare("COMMIT").run();
-
+    // send verification email (network call) - outside a transaction
     try {
-      console.info("[registerUser] Limpamos tentativas (caso existam)");
+      await sendVerificationEmail(env, email, code);
+    } catch (sendErr) {
+      console.error("[registerUser] falha ao enviar email; iniciando cleanup:", sendErr);
+
+      // best-effort cleanup: delete verification row, profile, user
+      try {
+        await env.DB.prepare("DELETE FROM email_verification_codes WHERE user_id = ?").bind(createdUser.id).run();
+        await env.DB.prepare("DELETE FROM user_profiles WHERE user_id = ?").bind(createdUser.id).run();
+        await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(createdUser.id).run();
+        console.info("[registerUser] cleanup completo após falha no envio de email para", maskedEmail);
+      } catch (cleanupErr) {
+        console.error("[registerUser] cleanup falhou (não fatal):", cleanupErr);
+      }
+
+      return jsonResponse({ error: "Failed to send verification email" }, 500);
+    }
+    
+    try {
       const clientIp = getClientIp(request);
       await clearAttempts(env.DB, email, clientIp);
-    } catch (err) {
-      console.warn(
-        "[registerUser] falha ao limpar tentativas (não fatal): ",
-        err
-      );
+    } catch (cErr) {
+      console.warn("[registerUser] clearAttempts falhou (não fatal):", cErr);
     }
 
     console.info("[registerUser] registro bem-sucedido para", maskedEmail);
-    return jsonResponse({ ok: true, user_id: user.id }, 201);
+    return jsonResponse({ ok: true, user_id: createdUser.id }, 201);
   } catch (err: any) {
-    // Try to rollback if something went wrong
-    try {
-      console.warn("[registerUser] error encountered, attempting ROLLBACK");
-      await env.DB.prepare("ROLLBACK").run();
-    } catch (rbErr) {
-      console.error("[registerUser] rollback failed:", rbErr);
-    }
-
-    // Detect unique constraint (DB-specific): attempt to match common messages
     const msg = (err && (err.message || String(err))) || "unknown error";
-    console.error("[registerUser] erro ao registrar: ", {
-      email: maskedEmail,
-      error: msg,
-      stack: err?.stack,
-    });
+    console.error("[registerUser] erro ao criar usuário:", { email: maskedEmail, error: msg, stack: err?.stack });
 
-    const isUniqueErr =
-      /unique constraint|UNIQUE constraint failed|already exists|duplicate key|unique/i.test(
-        msg
-      );
-
+    const isUniqueErr = /unique constraint|UNIQUE constraint failed|already exists|duplicate key|unique/i.test(msg);
     if (isUniqueErr) {
       return jsonResponse({ error: "User already exists" }, 409);
     }

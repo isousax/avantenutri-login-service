@@ -35,7 +35,6 @@ export async function resetPassword(request: Request, env: Env): Promise<Respons
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
-  // Accept either { email, code, new_password } or { user_id, code, new_password }
   const { email, user_id, code, new_password } = (body as {
     email?: string;
     user_id?: string;
@@ -54,15 +53,13 @@ export async function resetPassword(request: Request, env: Env): Promise<Respons
 
   // Resolve user id if email provided
   try {
-    await env.DB.prepare("BEGIN").run();
-
+    // resolve user by id or email
     let userRow: { id: string; email?: string } | null = null;
     if (user_id) {
       const r = await env.DB.prepare("SELECT id, email FROM users WHERE id = ?").bind(user_id).first<{ id?: string; email?: string }>();
       if (r && r.id) userRow = { id: r.id, email: r.email };
     } else {
       if (!isValidEmail(email!)) {
-        await env.DB.prepare("ROLLBACK").run().catch(() => {});
         return jsonResponse({ error: "Invalid input" }, 400);
       }
       const r = await env.DB.prepare("SELECT id, email FROM users WHERE email = ?").bind(email).first<{ id?: string; email?: string }>();
@@ -70,8 +67,8 @@ export async function resetPassword(request: Request, env: Env): Promise<Respons
     }
 
     if (!userRow) {
-      await env.DB.prepare("ROLLBACK").run().catch(() => {});
       // generic response to avoid enumeration
+      console.warn("[resetPassword] user not found (generic)");
       return jsonResponse({ error: "Invalid code or user" }, 401);
     }
 
@@ -93,7 +90,6 @@ export async function resetPassword(request: Request, env: Env): Promise<Respons
       .first<{ code?: string; expires_at?: string }>();
 
     if (!codeRow || !codeRow.code) {
-      await env.DB.prepare("ROLLBACK").run().catch(() => {});
       console.warn("[resetPassword] no reset row for user:", maskedEmail);
       return jsonResponse({ error: "Invalid or expired code" }, 401);
     }
@@ -101,7 +97,6 @@ export async function resetPassword(request: Request, env: Env): Promise<Respons
     const nowMs = Date.now();
     const expiresMs = Date.parse(codeRow.expires_at || "");
     if (codeRow.code !== code || isNaN(expiresMs) || expiresMs < nowMs) {
-      await env.DB.prepare("ROLLBACK").run().catch(() => {});
       console.warn("[resetPassword] code invalid/expired for user:", maskedEmail);
       return jsonResponse({ error: "Invalid or expired code" }, 401);
     }
@@ -114,18 +109,19 @@ export async function resetPassword(request: Request, env: Env): Promise<Respons
       .bind(newHash, userRow.id)
       .run();
 
-    // delete reset code
-    await env.DB.prepare("DELETE FROM password_reset_codes WHERE user_id = ?").bind(userRow.id).run();
+    // delete reset code (cleanup)
+    try {
+      await env.DB.prepare("DELETE FROM password_reset_codes WHERE user_id = ?").bind(userRow.id).run();
+    } catch (delErr) {
+      console.warn("[resetPassword] falha ao deletar código de reset (não fatal):", delErr);
+    }
 
-    // revoke sessions for user (mark revoked)
+    // revoke sessions for user (mark revoked) - non-fatal
     try {
       await env.DB.prepare("UPDATE user_sessions SET revoked = 1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?").bind(userRow.id).run();
     } catch (revErr) {
       console.warn("[resetPassword] revoke sessions failed (non-fatal):", revErr);
     }
-
-    // commit
-    await env.DB.prepare("COMMIT").run();
 
     // clear attempts (non-fatal)
     try {
@@ -138,7 +134,6 @@ export async function resetPassword(request: Request, env: Env): Promise<Respons
     console.info("[resetPassword] password reset OK for user:", maskedEmail);
     return jsonResponse({ ok: true }, 200);
   } catch (err: any) {
-    try { await env.DB.prepare("ROLLBACK").run().catch(()=>{}); } catch {}
     console.error("[resetPassword] unexpected error:", err?.message ?? err, err?.stack);
     return jsonResponse({ error: "Internal Server Error" }, 500);
   }

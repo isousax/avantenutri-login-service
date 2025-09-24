@@ -3,12 +3,17 @@ import {
   findSessionByRefreshToken,
   revokeSessionById,
 } from "../service/sessionManager";
+import { getClientIp, clearAttempts } from "../service/authAttempts";
 
 interface LogoutRequestBody {
   refresh_token: string;
 }
 
-const JSON_HEADERS = { "Content-Type": "application/json" };
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store",
+  Pragma: "no-cache",
+};
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -49,7 +54,24 @@ export async function logoutHandler(
     console.info("[logoutHandler] revogando session_id= ", session.id);
     await revokeSessionById(env.DB, session.id);
 
-    console.info("[logoutHandler] logout bem-sucedido para user_id= ", session.user_id);
+    try {
+      const userRow = await env.DB.prepare(
+        "SELECT email FROM users WHERE id = ?"
+      )
+        .bind(session.user_id)
+        .first<{ email?: string }>();
+      const clientIp = getClientIp(request);
+      if (userRow && userRow.email) {
+        await clearAttempts(env.DB, userRow.email, clientIp);
+      }
+    } catch (err) {
+      console.warn("[logoutHandler] clearAttempts falhou (não fatal):", err);
+    }
+
+    console.info(
+      "[logoutHandler] logout bem-sucedido para user_id= ",
+      session.user_id
+    );
     return jsonResponse({ ok: true }, 200);
   } catch (err: any) {
     const msg = (err && (err.message || String(err))) || "unknown error";

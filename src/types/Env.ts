@@ -7,4 +7,7 @@ export interface Env {
   JWT_SECRET: string;
   JWT_EXPIRATION_SEC: number;
   REFRESH_TOKEN_EXPIRATION_DAYS: number;
+	BREVO_API_KEY?: string;
+  EMAIL_FROM?: string;
+  EMAIL_REPLY_TO?: string;
 }

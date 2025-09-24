@@ -5,12 +5,17 @@ import {
   generateRefreshToken,
 } from "../service/sessionManager";
 import { generateJWT } from "../service/generateJWT";
+import { clearAttempts } from "../service/authAttempts";
 
 interface RefreshRequestBody {
   refresh_token: string;
 }
 
-const JSON_HEADERS = { "Content-Type": "application/json" };
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store",
+  Pragma: "no-cache",
+};
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -52,13 +57,19 @@ export async function refreshTokenHandler(
     }
 
     if (session.revoked) {
-      console.warn("[refreshTokenHandler] sessão revogada para user_id= ", session.user_id);
+      console.warn(
+        "[refreshTokenHandler] sessão revogada para user_id= ",
+        session.user_id
+      );
       return jsonResponse({ error: "Refresh token revoked" }, 401);
     }
 
     const expiresAt = new Date(session.expires_at).getTime();
     if (isNaN(expiresAt) || expiresAt < Date.now()) {
-      console.warn("[refreshTokenHandler] token de atualização expirado para user_id= ", session.user_id);
+      console.warn(
+        "[refreshTokenHandler] token de atualização expirado para user_id= ",
+        session.user_id
+      );
       return jsonResponse({ error: "Refresh token expired" }, 401);
     }
 
@@ -67,7 +78,10 @@ export async function refreshTokenHandler(
       ? Number(env.JWT_EXPIRATION_SEC)
       : 3600;
 
-    console.info("[refreshTokenHandler] gerando novo token de acesso para user_id= ", session.user_id);
+    console.info(
+      "[refreshTokenHandler] gerando novo token de acesso para user_id= ",
+      session.user_id
+    );
     const access_token = await generateJWT(
       { userId: session.user_id },
       env.JWT_SECRET,
@@ -84,10 +98,33 @@ export async function refreshTokenHandler(
       Date.now() + refreshDays * 24 * 60 * 60 * 1000
     ).toISOString();
 
-    console.info("[refreshTokenHandler] sessão rotativa para session_id= ", session.id);
+    console.info(
+      "[refreshTokenHandler] sessão rotativa para session_id= ",
+      session.id
+    );
     await rotateSession(env.DB, session.id, newPlain, newExpires);
 
-    console.info("[refreshTokenHandler] atualização de token bem-sucedida para user_id= ", session.user_id);
+    console.info(
+      "[refreshTokenHandler] atualização de token bem-sucedida para user_id= ",
+      session.user_id
+    );
+
+    try {
+      const userRow = await env.DB.prepare(
+        "SELECT email FROM users WHERE id = ?"
+      )
+        .bind(session.user_id)
+        .first<{ email?: string }>();
+      if (userRow && userRow.email) {
+        await clearAttempts(env.DB, userRow.email);
+      }
+    } catch (err) {
+      console.warn(
+        "[refreshTokenHandler] clearAttempts falhou (não fatal):",
+        err
+      );
+    }
+
     return jsonResponse(
       {
         access_token,

@@ -1,7 +1,14 @@
+// ./handlers/loginUser.ts
 import { generateJWT } from "../service/generateJWT";
 import { comparePassword } from "../service/managerPassword";
 import { generateRefreshToken, createSession } from "../service/sessionManager";
 import type { Env } from "../types/Env";
+import {
+  getClientIp,
+  checkLocks,
+  registerFailedAttempt,
+  clearAttempts,
+} from "../service/authAttempts";
 
 interface LoginRequestBody {
   email: string;
@@ -12,12 +19,20 @@ interface DBUser {
   id: string;
   email: string;
   password_hash: string;
+  full_name?: string | null;
+  phone?: string | null;
+  birth_date?: string | null;
 }
 
-const JSON_HEADERS = { "Content-Type": "application/json" };
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store",
+  Pragma: "no-cache",
+};
 
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+function jsonResponse(body: unknown, status = 200, extraHeaders?: Record<string, string>) {
+  const headers = { ...JSON_HEADERS, ...(extraHeaders || {}) };
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 function isValidEmail(email: string) {
@@ -36,93 +51,102 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
   }
 
   const { email, password } = body as LoginRequestBody;
-
   if (!email || !password) {
     console.warn("[loginUser] e-mail ou senha ausentes");
     return jsonResponse({ error: "Email and password required" }, 400);
   }
-
   if (!isValidEmail(email)) {
     console.warn("[loginUser] formato de e-mail inválido:", email);
     return jsonResponse({ error: "Invalid email format" }, 400);
   }
-
   if (!env.JWT_SECRET) {
     console.error("[loginUser] JWT_SECRET ausente no ambiente");
     return jsonResponse({ error: "Server misconfiguration" }, 500);
   }
 
-  const refreshDays = env.REFRESH_TOKEN_EXPIRATION_DAYS
-    ? Number(env.REFRESH_TOKEN_EXPIRATION_DAYS)
-    : 30;
-
+  const refreshDays = env.REFRESH_TOKEN_EXPIRATION_DAYS ? Number(env.REFRESH_TOKEN_EXPIRATION_DAYS) : 30;
+  const clientIp = getClientIp(request);
   const maskedEmail = (() => {
     try {
       const [local, domain] = email.split("@");
-      const visible =
-        local.length > 1 ? local[0] + "..." + local.slice(-1) : local;
+      const visible = local.length > 1 ? local[0] + "..." + local.slice(-1) : local;
       return `${visible}@${domain}`;
     } catch {
       return "unknown";
     }
   })();
-
-  console.info("[loginUser] tentando fazer login para: ", maskedEmail);
+  console.info("[loginUser] tentativa login para:", maskedEmail);
 
   try {
-    const user = await env.DB.prepare(
-      "SELECT id, email, password_hash FROM users WHERE email = ?"
-    )
+    // check locks
+    const lock = await checkLocks(env, email, clientIp);
+    if (lock.blocked) {
+      console.warn("[loginUser] bloqueado por tentativas:", maskedEmail);
+      return jsonResponse({ error: "Too many attempts. Try again later." }, 429, {
+        "Retry-After": String(lock.retryAfterSec ?? 60),
+      });
+    }
+
+    // fetch user + profile
+    const user = await env.DB
+      .prepare(
+        `SELECT u.id, u.email, u.password_hash,
+                p.full_name, p.phone, p.birth_date
+         FROM users u
+         LEFT JOIN user_profiles p ON p.user_id = u.id
+         WHERE u.email = ?`
+      )
       .bind(email)
       .first<DBUser>();
 
     if (!user) {
-      console.warn("[loginUser] usuário não encontrado: ", maskedEmail);
+      // register failed attempt and react accordingly
+      const res = await registerFailedAttempt(env, email, clientIp);
+      if (res.status === 429) {
+        return jsonResponse({ error: "Too many attempts. Try again later." }, 429, {
+          "Retry-After": String(res.retryAfterSec ?? 60),
+        });
+      }
       return jsonResponse({ error: "Invalid credentials" }, 401);
     }
 
     const passwordMatch = await comparePassword(password, user.password_hash);
     if (!passwordMatch) {
-      console.warn("[loginUser] senha inválida para: ", maskedEmail);
+      const res = await registerFailedAttempt(env, email, clientIp);
+      if (res.status === 429) {
+        return jsonResponse({ error: "Too many attempts. Try again later." }, 429, {
+          "Retry-After": String(res.retryAfterSec ?? 60),
+        });
+      }
       return jsonResponse({ error: "Invalid credentials" }, 401);
     }
 
-    const expiresIn = env.JWT_EXPIRATION_SEC
-      ? Number(env.JWT_EXPIRATION_SEC)
-      : 3600;
+    // success: clear attempts
+    await clearAttempts(env.DB, email, clientIp);
 
-    console.info("[loginUser] gerando token de acesso para user_id= ", user.id);
+    // issue tokens + session
+    const expiresIn = env.JWT_EXPIRATION_SEC ? Number(env.JWT_EXPIRATION_SEC) : 3600;
     const access_token = await generateJWT(
-      { userId: user.id, email: user.email },
+      {
+        sub: user.id,
+        email: user.email,
+        full_name: user.full_name ?? undefined,
+        phone: user.phone ?? undefined,
+        birth_date: user.birth_date ?? undefined,
+      },
       env.JWT_SECRET,
       expiresIn
     );
 
-    console.info("[loginUser] gerando token de atualização");
     const plainRefresh = await generateRefreshToken(64);
-    const expiresAt = new Date(
-      Date.now() + refreshDays * 24 * 60 * 60 * 1000
-    ).toISOString();
+    const expiresAt = new Date(Date.now() + refreshDays * 24 * 60 * 60 * 1000).toISOString();
 
-    console.info("[loginUser] criando sessão para user_id= ", user.id);
     await createSession(env.DB, user.id, plainRefresh, expiresAt);
 
-    console.info("[loginUser] login bem-sucedido para: ", maskedEmail);
-    return jsonResponse(
-      {
-        access_token,
-        refresh_token: plainRefresh,
-        expires_at: expiresAt,
-      },
-      200
-    );
+    console.info("[loginUser] login bem-sucedido para:", maskedEmail);
+    return jsonResponse({ access_token, refresh_token: plainRefresh, expires_at: expiresAt }, 200);
   } catch (err: any) {
-    const msg = (err && (err.message || String(err))) || "unknown error";
-    console.error("[loginUser] erro inesperado: ", {
-      email: maskedEmail,
-      error: msg,
-      stack: err?.stack,
-    });
+    console.error("[loginUser] erro inesperado:", err);
     return jsonResponse({ error: "Internal Server Error" }, 500);
   }
 }

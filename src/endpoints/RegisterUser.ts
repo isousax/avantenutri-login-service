@@ -162,7 +162,6 @@ export async function registerUser(request: Request, env: Env): Promise<Response
     } catch (sendErr) {
       console.error("[registerUser] falha ao enviar email; iniciando cleanup:", sendErr);
 
-      // best-effort cleanup: delete verification row, profile, user
       try {
         await env.DB.prepare("DELETE FROM email_verification_codes WHERE user_id = ?").bind(createdUser.id).run();
         await env.DB.prepare("DELETE FROM user_profiles WHERE user_id = ?").bind(createdUser.id).run();

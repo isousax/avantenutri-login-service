@@ -31,13 +31,13 @@ export default {
       return res;
     }
 
-    if (request.method === "POST" && url.pathname === "/auth/confirm-code") {
+    if (request.method === "POST" && url.pathname === "/auth/confirm-verification") {
       const res = await confirmVerificationToken(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       return res;
     }
 
-    if (request.method === "POST" && url.pathname === "/auth/resend-code") {
+    if (request.method === "POST" && url.pathname === "/auth/resend-verification") {
       const res = await resendVerificationCode(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       return res;

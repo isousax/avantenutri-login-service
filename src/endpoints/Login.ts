@@ -165,6 +165,7 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
       {
         sub: user.id,
         email: user.email,
+        role: user.role,
         full_name: user.full_name ?? undefined,
         phone: user.phone ?? undefined,
         birth_date: user.birth_date ?? undefined,
@@ -172,7 +173,6 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
       env.JWT_SECRET,
       expiresIn
     );
-    const roles = user.role;
 
     let plainRefresh: string | null = null;
     let expiresAt: string | null = null;
@@ -190,7 +190,6 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
     return jsonResponse(
       {
         access_token,
-        roles,
         ...(remember && plainRefresh
           ? { refresh_token: plainRefresh, expires_at: expiresAt }
           : {}),

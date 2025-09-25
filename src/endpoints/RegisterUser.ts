@@ -154,7 +154,7 @@ export async function registerUser(request: Request, env: Env): Promise<Response
     }
 
     // build verification link and send email
-    const base = (env.SITE_DNS || "").replace(/\/$/, "");
+    const base = `https://${env.SITE_DNS}`;
     const link = `${base}/confirm-email?token=${encodeURIComponent(plainToken)}`;
 
     try {

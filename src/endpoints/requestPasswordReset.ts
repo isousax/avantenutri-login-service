@@ -99,7 +99,7 @@ export async function requestPasswordReset(request: Request, env: Env): Promise<
          used = 0`
     ).bind(userRow.id, tokenHash, expiresAt).run();
 
-    const base = (env.SITE_DNS || "").replace(/\/$/, "");
+    const base = `https://${env.SITE_DNS}`
     const link = `${base}/reset-password?token=${encodeURIComponent(plainToken)}`;
 
     await sendPasswordResetEmail(env, userRow.email as string, link);

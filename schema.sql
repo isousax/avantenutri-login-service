@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   email_confirmed INTEGER DEFAULT 0,       -- 0/1
   password_hash TEXT NOT NULL,
-  role TEXT DEFAULT 'client',
+  role TEXT DEFAULT 'patient',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -103,7 +103,7 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
 
     // fetch user + profile
     const user = await env.DB.prepare(
-      `SELECT u.id, u.email, u.email_confirmed, u.password_hash, u.role
+      `SELECT u.id, u.email, u.email_confirmed, u.password_hash, u.role,
                 p.full_name, p.phone, p.birth_date,
          FROM users u
          LEFT JOIN user_profiles p ON p.user_id = u.id

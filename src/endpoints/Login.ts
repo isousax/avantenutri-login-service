@@ -52,21 +52,33 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
     body = await request.json();
   } catch (err) {
     console.warn("[loginUser] corpo JSON inválido");
-    return jsonResponse({ error: "Invalid JSON body" }, 400);
+    return jsonResponse(
+      { error: "O corpo da requisição não está em formato JSON válido." },
+      400
+    );
   }
 
   const { email, password, remember } = body as LoginRequestBody;
   if (!email || !password) {
     console.warn("[loginUser] e-mail ou senha ausentes");
-    return jsonResponse({ error: "Email and password required" }, 400);
+    return jsonResponse({ error: "E-mail e senha são obrigatórios." }, 400);
   }
   if (!isValidEmail(email)) {
     console.warn("[loginUser] formato de e-mail inválido:", email);
-    return jsonResponse({ error: "Invalid email format" }, 400);
+    return jsonResponse(
+      { error: "O formato do e-mail informado é inválido." },
+      400
+    );
   }
   if (!env.JWT_SECRET) {
     console.error("[loginUser] JWT_SECRET ausente no ambiente");
-    return jsonResponse({ error: "Server misconfiguration" }, 500);
+    return jsonResponse(
+      {
+        error:
+          "Erro interno no servidor. Por favor, tente novamente mais tarde.",
+      },
+      500
+    );
   }
 
   const refreshDays = remember
@@ -85,7 +97,7 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
       return "unknown";
     }
   })();
-  console.info("[loginUser] tentativa login para:", maskedEmail);
+  console.info("[loginUser] tentativa de login para:", maskedEmail);
 
   try {
     // check locks
@@ -93,7 +105,10 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
     if (lock.blocked) {
       console.warn("[loginUser] bloqueado por tentativas:", maskedEmail);
       return jsonResponse(
-        { error: "Too many attempts. Try again later." },
+        {
+          error:
+            "Muitas tentativas de acesso. Por favor, tente novamente mais tarde.",
+        },
         429,
         {
           "Retry-After": String(lock.retryAfterSec ?? 60),
@@ -104,7 +119,7 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
     // fetch user + profile
     const user = await env.DB.prepare(
       `SELECT u.id, u.email, u.email_confirmed, u.password_hash, u.role,
-                p.full_name, p.phone, p.birth_date,
+                p.full_name, p.phone, p.birth_date
          FROM users u
          LEFT JOIN user_profiles p ON p.user_id = u.id
          WHERE u.email = ?`
@@ -117,9 +132,8 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
         "[loginUser] tentativa de login para conta não confirmada:",
         maskedEmail
       );
-      // opcional: enviar a mensagem específica ou instruir front a chamar /auth/resend-code
       return jsonResponse(
-        { error: "Email not verified. Check your inbox." },
+        { error: "E-mail não verificado. Verifique sua caixa de entrada." },
         403
       );
     }
@@ -129,14 +143,17 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
       const res = await registerFailedAttempt(env, email, clientIp);
       if (res.status === 429) {
         return jsonResponse(
-          { error: "Too many attempts. Try again later." },
+          {
+            error:
+              "Muitas tentativas de acesso. Por favor, tente novamente mais tarde.",
+          },
           429,
           {
             "Retry-After": String(res.retryAfterSec ?? 60),
           }
         );
       }
-      return jsonResponse({ error: "Invalid credentials" }, 401);
+      return jsonResponse({ error: "Credenciais inválidas." }, 401);
     }
 
     const passwordMatch = await comparePassword(password, user.password_hash);
@@ -144,14 +161,17 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
       const res = await registerFailedAttempt(env, email, clientIp);
       if (res.status === 429) {
         return jsonResponse(
-          { error: "Too many attempts. Try again later." },
+          {
+            error:
+              "Muitas tentativas de acesso. Por favor, tente novamente mais tarde.",
+          },
           429,
           {
             "Retry-After": String(res.retryAfterSec ?? 60),
           }
         );
       }
-      return jsonResponse({ error: "Invalid credentials" }, 401);
+      return jsonResponse({ error: "Credenciais inválidas." }, 401);
     }
 
     // success: clear attempts
@@ -198,6 +218,12 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
     );
   } catch (err: any) {
     console.error("[loginUser] erro inesperado:", err);
-    return jsonResponse({ error: "Internal Server Error" }, 500);
+    return jsonResponse(
+      {
+        error:
+          "Ocorreu um problema no sistema. Por favor, tente novamente mais tarde.",
+      },
+      500
+    );
   }
 }

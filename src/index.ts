@@ -8,6 +8,7 @@ import { requestPasswordReset } from "./endpoints/requestPasswordReset";
 import { resetPassword } from "./endpoints/resetPassword";
 
 import type { Env } from "./types/Env";
+import { meHandler } from "./endpoints/me";
 
 function getCorsHeaders(env: Env) {
   return {
@@ -31,13 +32,19 @@ export default {
       return res;
     }
 
-    if (request.method === "POST" && url.pathname === "/auth/confirm-verification") {
+    if (
+      request.method === "POST" &&
+      url.pathname === "/auth/confirm-verification"
+    ) {
       const res = await confirmVerificationToken(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       return res;
     }
 
-    if (request.method === "POST" && url.pathname === "/auth/resend-verification") {
+    if (
+      request.method === "POST" &&
+      url.pathname === "/auth/resend-verification"
+    ) {
       const res = await resendVerificationCode(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       return res;
@@ -45,6 +52,12 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/auth/login") {
       const res = await loginUser(request, env);
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      return res;
+    }
+
+    if (request.method === "POST" && url.pathname === "/auth/me") {
+      const res = await meHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       return res;
     }

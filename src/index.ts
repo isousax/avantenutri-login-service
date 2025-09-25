@@ -3,7 +3,7 @@ import { loginUser } from "./endpoints/Login";
 import { refreshTokenHandler } from "./endpoints/Refresh";
 import { logoutHandler } from "./endpoints/Logout";
 import { confirmVerificationToken } from "./endpoints/confirmVerificationToken";
-import { resendVerificationCode } from "./endpoints/resendVerificationCode";
+import { resendVerificationCode } from "./endpoints/resendVerificationToken";
 import { requestPasswordReset } from "./endpoints/requestPasswordReset";
 import { resetPassword } from "./endpoints/resetPassword";
 

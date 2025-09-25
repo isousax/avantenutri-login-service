@@ -198,7 +198,7 @@ export async function registerUser(request: Request, env: Env): Promise<Response
 
     // --- No existing user: create new user (original flow) ---
     const userRow = await env.DB.prepare(
-      "INSERT INTO users (email, password_hash, role, created_at, email_confirmed) VALUES (?, ?, 'client', CURRENT_TIMESTAMP, 0) RETURNING id"
+      "INSERT INTO users (email, password_hash, role, created_at, email_confirmed) VALUES (?, ?, 'patient', CURRENT_TIMESTAMP, 0) RETURNING id"
     )
       .bind(email, passwordHash)
       .first<DBUser>();

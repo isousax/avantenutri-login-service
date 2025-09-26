@@ -22,7 +22,9 @@ function getCorsHeaders(env: Env, requestId?: string) {
   return {
     "Access-Control-Allow-Origin": env.SITE_DNS,
     "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-Id, X-Api-Key",
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, X-Request-Id, X-Api-Key",
     "Content-Security-Policy": "frame-ancestors 'none';",
     ...(requestId ? { "X-Request-Id": requestId } : {}),
   };
@@ -30,17 +32,20 @@ function getCorsHeaders(env: Env, requestId?: string) {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-  const url = new URL(request.url);
-  const requestId = ensureRequestId(request);
+    const url = new URL(request.url);
+    const requestId = ensureRequestId(request);
 
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: getCorsHeaders(env, requestId) });
     }
 
-    if (request.method === 'GET' && url.pathname === '/auth/.well-known/jwks.json') {
+    if (
+      request.method === "GET" &&
+      url.pathname === "/auth/.well-known/jwks.json"
+    ) {
       const res = await jwksHandler(env);
-      res.headers.set('Access-Control-Allow-Origin', env.SITE_DNS);
-      res.headers.set('X-Request-Id', requestId);
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
@@ -131,7 +136,7 @@ export default {
       return res;
     }
 
-    if (request.method === 'PATCH' && url.pathname === '/auth/profile') {
+    if (request.method === "PATCH" && url.pathname === "/auth/profile") {
       const res = await updateProfileHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
@@ -139,7 +144,7 @@ export default {
       return res;
     }
 
-    if (request.method === 'GET' && url.pathname === '/admin/audit') {
+    if (request.method === "GET" && url.pathname === "/admin/audit") {
       const res = await adminAuditHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
@@ -147,7 +152,7 @@ export default {
       return res;
     }
 
-    if (request.method === 'GET' && url.pathname === '/auth/entitlements') {
+    if (request.method === "GET" && url.pathname === "/auth/entitlements") {
       const res = await entitlementsHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
@@ -155,7 +160,11 @@ export default {
       return res;
     }
 
-    if (request.method === 'PATCH' && url.pathname.startsWith('/admin/users/') && url.pathname.endsWith('/role')) {
+    if (
+      request.method === "PATCH" &&
+      url.pathname.startsWith("/admin/users/") &&
+      url.pathname.endsWith("/role")
+    ) {
       const res = await adminChangeRoleHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
@@ -163,7 +172,7 @@ export default {
       return res;
     }
 
-    if (request.method === 'GET' && url.pathname === '/admin/users') {
+    if (request.method === "GET" && url.pathname === "/admin/users") {
       const res = await adminListUsersHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
@@ -171,7 +180,11 @@ export default {
       return res;
     }
 
-    if (request.method === 'POST' && url.pathname.startsWith('/admin/users/') && url.pathname.endsWith('/force-logout')) {
+    if (
+      request.method === "POST" &&
+      url.pathname.startsWith("/admin/users/") &&
+      url.pathname.endsWith("/force-logout")
+    ) {
       const res = await adminForceLogoutHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
@@ -181,7 +194,10 @@ export default {
 
     return new Response(JSON.stringify({ error: "Not Found" }), {
       status: 404,
-      headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-Id": requestId,
+      },
     });
   },
 };

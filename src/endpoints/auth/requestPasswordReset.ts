@@ -115,7 +115,7 @@ export async function requestPasswordReset(
       .bind(userRow.id, tokenHash, expiresAt)
       .run();
 
-    const base = `https://${env.SITE_DNS}`;
+    const base = env.SITE_DNS;
     const link = `${base}/reset-password?token=${encodeURIComponent(
       plainToken
     )}`;

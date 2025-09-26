@@ -101,7 +101,7 @@ export async function resendVerificationCode(
       .run();
 
     // build link and send
-    const base = `https://${env.SITE_DNS}`;
+    const base = env.SITE_DNS;
     const link = `${base}/confirm-email?token=${encodeURIComponent(
       plainToken
     )}`;

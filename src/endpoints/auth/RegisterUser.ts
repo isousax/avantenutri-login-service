@@ -215,7 +215,7 @@ export async function registerUser(
           .run();
 
         // build verification link and send email
-        const base = `https://${env.SITE_DNS}`;
+        const base = env.SITE_DNS;
         const link = `${base}/confirm-email?token=${encodeURIComponent(
           plainToken
         )}`;
@@ -367,7 +367,7 @@ export async function registerUser(
     }
 
     // build verification link and send email
-    const base = `https://${env.SITE_DNS}`;
+    const base = env.SITE_DNS;
     const link = `${base}/confirm-email?token=${encodeURIComponent(
       plainToken
     )}`;

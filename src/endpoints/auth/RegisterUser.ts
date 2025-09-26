@@ -1,9 +1,9 @@
-import { hashPassword } from "../service/managerPassword";
-import { getClientIp, clearAttempts } from "../service/authAttempts";
-import { generateToken } from "../utils/generateToken";
-import { hashToken } from "../utils/hashToken";
-import { sendVerificationEmail } from "../utils/sendVerificationEmail";
-import type { Env } from "../types/Env";
+import { hashPassword } from "../../service/managerPassword";
+import { getClientIp, clearAttempts } from "../../service/authAttempts";
+import { generateToken } from "../../utils/generateToken";
+import { hashToken } from "../../utils/hashToken";
+import { sendVerificationEmail } from "../../utils/sendVerificationEmail";
+import type { Env } from "../../types/Env";
 
 interface RegisterRequestBody {
   email: string;
@@ -33,10 +33,14 @@ function isValidEmail(email: string) {
 }
 
 const PHONE_E164_REGEX = /^\+?[1-9]\d{1,14}$/;
-const PASSWORD_POLICY_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+const PASSWORD_POLICY_REGEX =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
 const TOKEN_TTL_MIN = 15; // token expiration in minutes
 
-export async function registerUser(request: Request, env: Env): Promise<Response> {
+export async function registerUser(
+  request: Request,
+  env: Env
+): Promise<Response> {
   console.info("[registerUser] solicitação recebida");
 
   let body: unknown;
@@ -44,7 +48,10 @@ export async function registerUser(request: Request, env: Env): Promise<Response
     body = await request.json();
   } catch (err) {
     console.warn("[registerUser] invalid JSON body");
-    return jsonResponse({ error: "Preencha todos os campos obrigatórios antes de continuar." }, 400);
+    return jsonResponse(
+      { error: "Preencha todos os campos obrigatórios antes de continuar." },
+      400
+    );
   }
 
   const { email, password, full_name, phone, birth_date } =
@@ -52,11 +59,20 @@ export async function registerUser(request: Request, env: Env): Promise<Response
 
   if (!email || !password || !full_name || !phone || !birth_date) {
     console.warn("[registerUser] corpo de solicitação malformado");
-    return jsonResponse({ error: "Preencha todos os campos obrigatórios antes de continuar." }, 400);
+    return jsonResponse(
+      { error: "Preencha todos os campos obrigatórios antes de continuar." },
+      400
+    );
   }
   if (!isValidEmail(email)) {
     console.warn("[registerUser] formato de e-mail inválido:", email);
-    return jsonResponse({ error: "O endereço de e-mail informado não é válido. Verifique e tente novamente." }, 400);
+    return jsonResponse(
+      {
+        error:
+          "O endereço de e-mail informado não é válido. Verifique e tente novamente.",
+      },
+      400
+    );
   }
   if (!PASSWORD_POLICY_REGEX.test(password)) {
     console.warn("[registerUser] senha não atende à política de segurança");
@@ -70,18 +86,33 @@ export async function registerUser(request: Request, env: Env): Promise<Response
   }
   if (isNaN(Date.parse(birth_date))) {
     console.warn("[registerUser] data de nascimento inválida:", birth_date);
-    return jsonResponse({ error: "A data de nascimento informada é inválida. Verifique e tente novamente." }, 400);
+    return jsonResponse(
+      {
+        error:
+          "A data de nascimento informada é inválida. Verifique e tente novamente.",
+      },
+      400
+    );
   }
   if (!PHONE_E164_REGEX.test(phone)) {
     console.warn("[registerUser] telefone inválido (esperado E.164):", phone);
     return jsonResponse(
-      { error: "O número de telefone informado é inválido. Certifique-se de incluir o DDD." },
+      {
+        error:
+          "O número de telefone informado é inválido. Certifique-se de incluir o DDD.",
+      },
       400
     );
   }
   if (!env.JWT_SECRET) {
     console.error("[registerUser] JWT_SECRET ausente no ambiente");
-    return jsonResponse({ error: "Algo deu errado no servidor. Por favor, tente novamente mais tarde." }, 500);
+    return jsonResponse(
+      {
+        error:
+          "Algo deu errado no servidor. Por favor, tente novamente mais tarde.",
+      },
+      500
+    );
   }
 
   const maskedEmail = (() => {
@@ -103,7 +134,13 @@ export async function registerUser(request: Request, env: Env): Promise<Response
     passwordHash = await hashPassword(password);
   } catch (err) {
     console.error("[registerUser] hashPassword failed", err);
-    return jsonResponse({ error: "Ocorreu um erro inesperado. Por favor, tente novamente mais tarde." }, 500);
+    return jsonResponse(
+      {
+        error:
+          "Ocorreu um erro inesperado. Por favor, tente novamente mais tarde.",
+      },
+      500
+    );
   }
 
   // --- Check if user exists first ---
@@ -117,12 +154,24 @@ export async function registerUser(request: Request, env: Env): Promise<Response
     if (existing && existing.id) {
       // If already confirmed -> reject
       if (Number(existing.email_confirmed) === 1) {
-        console.warn("[registerUser] tentativa de registro para email já existente e confirmado:", maskedEmail);
-        return jsonResponse({ error: "Este e-mail já está cadastrado. Tente fazer login ou recupere sua senha." }, 409);
+        console.warn(
+          "[registerUser] tentativa de registro para email já existente e confirmado:",
+          maskedEmail
+        );
+        return jsonResponse(
+          {
+            error:
+              "Este e-mail já está cadastrado. Tente fazer login ou recupere sua senha.",
+          },
+          409
+        );
       }
 
       // existing but NOT confirmed -> treat as re-register: update password + profile and continue
-      console.info("[registerUser] email já existe, não confirmado — atualizando conta existente:", maskedEmail);
+      console.info(
+        "[registerUser] email já existe, não confirmado — atualizando conta existente:",
+        maskedEmail
+      );
       try {
         // update password_hash + updated_at
         await env.DB.prepare(
@@ -149,7 +198,9 @@ export async function registerUser(request: Request, env: Env): Promise<Response
         // create verification token (store only hash)
         const plainToken = generateToken(32);
         const tokenHash = await hashToken(plainToken);
-        const expiresAt = new Date(Date.now() + TOKEN_TTL_MIN * 60 * 1000).toISOString();
+        const expiresAt = new Date(
+          Date.now() + TOKEN_TTL_MIN * 60 * 1000
+        ).toISOString();
 
         await env.DB.prepare(
           `INSERT INTO email_verification_codes (user_id, token_hash, expires_at, created_at, used)
@@ -165,19 +216,37 @@ export async function registerUser(request: Request, env: Env): Promise<Response
 
         // build verification link and send email
         const base = `https://${env.SITE_DNS}`;
-        const link = `${base}/confirm-email?token=${encodeURIComponent(plainToken)}`;
+        const link = `${base}/confirm-email?token=${encodeURIComponent(
+          plainToken
+        )}`;
 
         try {
           await sendVerificationEmail(env, email, link);
         } catch (sendErr) {
-          console.error("[registerUser] falha ao enviar email; iniciando cleanup token:", sendErr);
+          console.error(
+            "[registerUser] falha ao enviar email; iniciando cleanup token:",
+            sendErr
+          );
           // try to remove verification code to avoid stale token (keep account, but no token)
           try {
-            await env.DB.prepare("DELETE FROM email_verification_codes WHERE user_id = ?").bind(createdUser.id).run();
+            await env.DB.prepare(
+              "DELETE FROM email_verification_codes WHERE user_id = ?"
+            )
+              .bind(createdUser.id)
+              .run();
           } catch (cleanupErr) {
-            console.warn("[registerUser] cleanup token failed (non-fatal):", cleanupErr);
+            console.warn(
+              "[registerUser] cleanup token failed (non-fatal):",
+              cleanupErr
+            );
           }
-          return jsonResponse({ error: "Não foi possível enviar o e-mail de verificação. Por favor, tente novamente mais tarde." }, 500);
+          return jsonResponse(
+            {
+              error:
+                "Não foi possível enviar o e-mail de verificação. Por favor, tente novamente mais tarde.",
+            },
+            500
+          );
         }
 
         // clear attempts (non-fatal)
@@ -185,14 +254,29 @@ export async function registerUser(request: Request, env: Env): Promise<Response
           const clientIp = getClientIp(request);
           await clearAttempts(env.DB, email, clientIp);
         } catch (cErr) {
-          console.warn("[registerUser] clearAttempts falhou (não fatal):", cErr);
+          console.warn(
+            "[registerUser] clearAttempts falhou (não fatal):",
+            cErr
+          );
         }
 
-        console.info("[registerUser] re-registro bem-sucedido (conta existente atualizada) para", maskedEmail);
+        console.info(
+          "[registerUser] re-registro bem-sucedido (conta existente atualizada) para",
+          maskedEmail
+        );
         return jsonResponse({ ok: true, user_id: createdUser.id }, 201);
       } catch (innerErr) {
-        console.error("[registerUser] erro ao atualizar conta existente:", innerErr);
-        return jsonResponse({ error: "Ocorreu um erro ao atualizar seus dados. Por favor, tente novamente mais tarde." }, 500);
+        console.error(
+          "[registerUser] erro ao atualizar conta existente:",
+          innerErr
+        );
+        return jsonResponse(
+          {
+            error:
+              "Ocorreu um erro ao atualizar seus dados. Por favor, tente novamente mais tarde.",
+          },
+          500
+        );
       }
     }
 
@@ -205,7 +289,13 @@ export async function registerUser(request: Request, env: Env): Promise<Response
 
     if (!userRow || !userRow.id) {
       console.error("[registerUser] failed to retrieve user id after insert");
-      return jsonResponse({ error: "Não foi possível criar sua conta no momento. Por favor, tente novamente mais tarde." }, 500);
+      return jsonResponse(
+        {
+          error:
+            "Não foi possível criar sua conta no momento. Por favor, tente novamente mais tarde.",
+        },
+        500
+      );
     }
     const createdUser = userRow;
 
@@ -216,12 +306,17 @@ export async function registerUser(request: Request, env: Env): Promise<Response
       .bind(createdUser.id, full_name, phone, birth_date)
       .run();
 
-    console.info("[registerUser] usuário registrado com sucesso: ", maskedEmail);
+    console.info(
+      "[registerUser] usuário registrado com sucesso: ",
+      maskedEmail
+    );
 
     // create verification token (store only hash)
     const plainToken = generateToken(32);
     const tokenHash = await hashToken(plainToken);
-    const expiresAt = new Date(Date.now() + TOKEN_TTL_MIN * 60 * 1000).toISOString();
+    const expiresAt = new Date(
+      Date.now() + TOKEN_TTL_MIN * 60 * 1000
+    ).toISOString();
 
     try {
       await env.DB.prepare(
@@ -233,41 +328,78 @@ export async function registerUser(request: Request, env: Env): Promise<Response
            created_at = CURRENT_TIMESTAMP,
            used = 0`
       )
-      .bind(createdUser.id, tokenHash, expiresAt)
-      .run();
+        .bind(createdUser.id, tokenHash, expiresAt)
+        .run();
     } catch (dbErr) {
-      console.error("[registerUser] falha ao gravar token de verificação:", dbErr);
+      console.error(
+        "[registerUser] falha ao gravar token de verificação:",
+        dbErr
+      );
       // best-effort cleanup: remove created user+profile to avoid orphaned accounts
       try {
-        await env.DB.prepare("DELETE FROM user_profiles WHERE user_id = ?").bind(createdUser.id).run();
-        await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(createdUser.id).run();
-        console.info("[registerUser] cleanup realizado após erro ao gravar token");
+        await env.DB.prepare("DELETE FROM user_profiles WHERE user_id = ?")
+          .bind(createdUser.id)
+          .run();
+        await env.DB.prepare("DELETE FROM users WHERE id = ?")
+          .bind(createdUser.id)
+          .run();
+        console.info(
+          "[registerUser] cleanup realizado após erro ao gravar token"
+        );
       } catch (cleanupErr) {
         console.error("[registerUser] cleanup falhou (não fatal):", cleanupErr);
       }
-      return jsonResponse({ error: "Ocorreu um problema ao finalizar seu cadastro. Por favor, tente novamente mais tarde." }, 500);
+      return jsonResponse(
+        {
+          error:
+            "Ocorreu um problema ao finalizar seu cadastro. Por favor, tente novamente mais tarde.",
+        },
+        500
+      );
     }
 
     // build verification link and send email
     const base = `https://${env.SITE_DNS}`;
-    const link = `${base}/confirm-email?token=${encodeURIComponent(plainToken)}`;
+    const link = `${base}/confirm-email?token=${encodeURIComponent(
+      plainToken
+    )}`;
 
     try {
       await sendVerificationEmail(env, email, link);
     } catch (sendErr) {
-      console.error("[registerUser] falha ao enviar email; iniciando cleanup:", sendErr);
+      console.error(
+        "[registerUser] falha ao enviar email; iniciando cleanup:",
+        sendErr
+      );
 
       // best-effort cleanup: delete verification row, profile, user
       try {
-        await env.DB.prepare("DELETE FROM email_verification_codes WHERE user_id = ?").bind(createdUser.id).run();
-        await env.DB.prepare("DELETE FROM user_profiles WHERE user_id = ?").bind(createdUser.id).run();
-        await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(createdUser.id).run();
-        console.info("[registerUser] cleanup completo após falha no envio de email para", maskedEmail);
+        await env.DB.prepare(
+          "DELETE FROM email_verification_codes WHERE user_id = ?"
+        )
+          .bind(createdUser.id)
+          .run();
+        await env.DB.prepare("DELETE FROM user_profiles WHERE user_id = ?")
+          .bind(createdUser.id)
+          .run();
+        await env.DB.prepare("DELETE FROM users WHERE id = ?")
+          .bind(createdUser.id)
+          .run();
+        console.info(
+          "[registerUser] cleanup completo após falha no envio de email para",
+          maskedEmail
+        );
       } catch (cleanupErr) {
         console.error("[registerUser] cleanup falhou (não fatal):", cleanupErr);
       }
 
-      return jsonResponse({ error: "Não foi possível enviar o e-mail de verificação. Seu cadastro não foi concluído. Por favor, tente novamente mais tarde." }, 500);
+      return jsonResponse(
+        {
+          error:
+            "Não foi possível enviar o e-mail de verificação. Seu cadastro não foi concluído. Por favor, tente novamente mais tarde.",
+        },
+        500
+      );
     }
 
     // clear attempts (non-fatal)
@@ -294,9 +426,21 @@ export async function registerUser(request: Request, env: Env): Promise<Response
         msg
       );
     if (isUniqueErr) {
-      return jsonResponse({ error: "Este e-mail já está cadastrado. Por favor, tente fazer login ou recupere sua senha." }, 409);
+      return jsonResponse(
+        {
+          error:
+            "Este e-mail já está cadastrado. Por favor, tente fazer login ou recupere sua senha.",
+        },
+        409
+      );
     }
 
-    return jsonResponse({ error: "Ocorreu um problema ao processar sua solicitação. Por favor, tente novamente mais tarde." }, 500);
+    return jsonResponse(
+      {
+        error:
+          "Ocorreu um problema ao processar sua solicitação. Por favor, tente novamente mais tarde.",
+      },
+      500
+    );
   }
 }

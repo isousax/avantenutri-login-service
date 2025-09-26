@@ -1,5 +1,5 @@
-import type { Env } from "../types/Env";
-import { verifyJWT } from "../service/verifyJWT";
+import type { Env } from "../../types/Env";
+import { verifyAccessToken } from "../../service/tokenVerify";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json",
@@ -22,22 +22,18 @@ function jsonResponse(
  */
 export async function meHandler(request: Request, env: Env): Promise<Response> {
   try {
-    if (!env.JWT_SECRET) {
-      console.error("[meHandler] missing JWT_SECRET");
-      return jsonResponse({ error: "Server misconfiguration" }, 500);
-    }
-
     // Extract token
     const auth = request.headers.get("Authorization") || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
     if (!token) {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
-
-    // Verify
-    const payload = await verifyJWT(token, env.JWT_SECRET);
-    if (!payload) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
+    const { valid, payload, reason } = await verifyAccessToken(env, token, {
+      issuer: env.SITE_DNS,
+      audience: env.SITE_DNS,
+    });
+    if (!valid || !payload) {
+      return jsonResponse({ error: "Unauthorized", reason }, 401);
     }
 
     // The payload should contain sub (user id) or similar
@@ -52,7 +48,7 @@ export async function meHandler(request: Request, env: Env): Promise<Response> {
     // Optional: if you want to enforce server-side revocation, implement logic here
     // (see notes below). For now we fetch user + profile.
     const row = await env.DB.prepare(
-      `SELECT u.id, u.email, u.role, u.email_confirmed,
+      `SELECT u.id, u.email, u.role, u.email_confirmed, u.session_version, u.display_name,
               p.full_name, p.phone, p.birth_date, p.photo_url
        FROM users u
        LEFT JOIN user_profiles p ON p.user_id = u.id
@@ -65,10 +61,12 @@ export async function meHandler(request: Request, env: Env): Promise<Response> {
             email?: string;
             role?: string;
             email_confirmed?: number;
+            session_version?: number;
             full_name?: string | null;
             phone?: string | null;
             birth_date?: string | null;
             photo_url?: string | null;
+            display_name?: string | null;
           }
         | undefined
       >();
@@ -83,11 +81,22 @@ export async function meHandler(request: Request, env: Env): Promise<Response> {
       return jsonResponse({ error: "Email not verified" }, 403);
     }
 
+    // Session version mismatch => invalida token
+    if (
+      typeof row.session_version === "number" &&
+      typeof payload.session_version === "number"
+    ) {
+      if (row.session_version !== payload.session_version) {
+        return jsonResponse({ error: "Token outdated" }, 401);
+      }
+    }
+
     const user = {
       id: row.id,
       email: row.email ?? "",
       role: row.role ?? "patient",
       full_name: row.full_name ?? "",
+      display_name: row.display_name ?? null,
       phone: row.phone ?? null,
       birth_date: row.birth_date ?? null,
       photo_url: row.photo_url ?? null,

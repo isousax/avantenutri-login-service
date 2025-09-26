@@ -1,13 +1,13 @@
-import { generateJWT } from "../service/generateJWT";
-import { comparePassword } from "../service/managerPassword";
-import { generateRefreshToken, createSession } from "../service/sessionManager";
-import type { Env } from "../types/Env";
+import { generateJWT } from "../../service/generateJWT";
+import { comparePassword } from "../../service/managerPassword";
+import { generateRefreshToken, createSession } from "../../service/sessionManager";
+import type { Env } from "../../types/Env";
 import {
   getClientIp,
   checkLocks,
   registerFailedAttempt,
   clearAttempts,
-} from "../service/authAttempts";
+} from "../../service/authAttempts";
 
 interface LoginRequestBody {
   email: string;
@@ -118,7 +118,7 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
 
     // fetch user + profile
     const user = await env.DB.prepare(
-      `SELECT u.id, u.email, u.email_confirmed, u.password_hash, u.role,
+      `SELECT u.id, u.email, u.email_confirmed, u.password_hash, u.role, u.session_version,
                 p.full_name, p.phone, p.birth_date
          FROM users u
          LEFT JOIN user_profiles p ON p.user_id = u.id
@@ -177,21 +177,56 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
     // success: clear attempts
     await clearAttempts(env.DB, email, clientIp);
 
+    // Atualiza last_login_at e display_name se ainda não definido (display_name fallback para parte antes de @)
+    try {
+      const fallbackName = (user.email || "").split("@")[0];
+      await env.DB.prepare(
+        `UPDATE users SET last_login_at = CURRENT_TIMESTAMP, display_name = COALESCE(display_name, ?) , updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+      )
+        .bind(fallbackName, user.id)
+        .first();
+    } catch (e) {
+      console.warn(
+        "[loginUser] falha ao atualizar last_login_at/display_name",
+        e
+      );
+    }
+
     // issue tokens + session
     const expiresIn = env.JWT_EXPIRATION_SEC
       ? Number(env.JWT_EXPIRATION_SEC)
       : 3600;
+    // Recuperar display_name definitivo para inserir no token
+    let displayNameRow: { display_name?: string } | null = null;
+    try {
+      displayNameRow = await env.DB.prepare(
+        "SELECT display_name FROM users WHERE id = ?"
+      )
+        .bind(user.id)
+        .first<{ display_name?: string }>();
+    } catch {}
+
     const access_token = await generateJWT(
       {
         sub: user.id,
         email: user.email,
         role: user.role,
+        session_version: (user as any).session_version ?? 0,
         full_name: user.full_name ?? undefined,
         phone: user.phone ?? undefined,
         birth_date: user.birth_date ?? undefined,
+        display_name: displayNameRow?.display_name ?? undefined,
+        iss: env.SITE_DNS,
+        aud: env.SITE_DNS,
       },
       env.JWT_SECRET,
-      expiresIn
+      expiresIn,
+      env.JWT_PRIVATE_KEY_PEM
+        ? {
+            privateKeyPem: env.JWT_PRIVATE_KEY_PEM,
+            kid: env.JWT_JWKS_KID || "k1",
+          }
+        : undefined
     );
 
     let plainRefresh: string | null = null;
@@ -210,6 +245,8 @@ export async function loginUser(request: Request, env: Env): Promise<Response> {
     return jsonResponse(
       {
         access_token,
+        token_type: "Bearer",
+        display_name: displayNameRow?.display_name ?? null,
         ...(remember && plainRefresh
           ? { refresh_token: plainRefresh, expires_at: expiresAt }
           : {}),

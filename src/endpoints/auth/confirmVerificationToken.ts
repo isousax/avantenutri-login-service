@@ -1,7 +1,7 @@
 // handlers/confirmVerificationToken.ts
-import { hashToken } from "../utils/hashToken";
-import { getClientIp, clearAttempts } from "../service/authAttempts";
-import type { Env } from "../types/Env";
+import { hashToken } from "../../utils/hashToken";
+import { getClientIp, clearAttempts } from "../../service/authAttempts";
+import type { Env } from "../../types/Env";
 
 interface ConfirmTokenBody {
   token?: string;

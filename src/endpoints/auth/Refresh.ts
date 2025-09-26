@@ -1,23 +1,22 @@
-import type { Env } from "../types/Env";
+import type { Env } from "../../types/Env";
 import {
   findSessionByRefreshToken,
   rotateSession,
   generateRefreshToken,
-} from "../service/sessionManager";
-import { generateJWT } from "../service/generateJWT";
-import { clearAttempts } from "../service/authAttempts";
+} from "../../service/sessionManager";
+import { generateJWT } from "../../service/generateJWT";
+import { clearAttempts } from "../../service/authAttempts";
 
 interface RefreshRequestBody {
   refresh_token: string;
 }
 
-interface DBUser {
-  id: string;
-  email: string;
-  password_hash: string;
+interface DBUserProfile {
   full_name?: string | null;
   phone?: string | null;
   birth_date?: string | null;
+  role?: string | null;
+  email_confirmed?: number | null;
 }
 
 const JSON_HEADERS = {
@@ -82,16 +81,29 @@ export async function refreshTokenHandler(
       return jsonResponse({ error: "Refresh token expired" }, 401);
     }
 
-    const user = await env.DB.prepare(
-      `SELECT p.full_name, p.phone, p.birth_date
+    const userProfile = await env.DB.prepare(
+      `SELECT u.role, u.email_confirmed, u.session_version, u.display_name, p.full_name, p.phone, p.birth_date
          FROM users u
          LEFT JOIN user_profiles p ON p.user_id = u.id
          WHERE u.email = ?`
     )
       .bind(session.email)
-      .first<DBUser>();
+      .first<
+        DBUserProfile & {
+          session_version?: number;
+          display_name?: string | null;
+        }
+      >();
 
-    // Tudo ok: gerar novo access token
+    if (userProfile && (userProfile as any).email_confirmed !== 1) {
+      console.warn(
+        "[refreshTokenHandler] email não confirmado para user_id= ",
+        session.user_id
+      );
+      return jsonResponse({ error: "E-mail não verificado." }, 403);
+    }
+
+    // Tudo ok: gerar novo access token (RS256 se chave privada estiver presente)
     const jwtExp = env.JWT_EXPIRATION_SEC
       ? Number(env.JWT_EXPIRATION_SEC)
       : 3600;
@@ -104,18 +116,27 @@ export async function refreshTokenHandler(
       {
         sub: session.user_id,
         email: session.email ?? undefined,
-        full_name: user.full_name ?? undefined,
-        phone: user.phone ?? undefined,
-        birth_date: user.birth_date ?? undefined,
+        role: userProfile?.role ?? undefined,
+        full_name: userProfile?.full_name ?? undefined,
+        phone: userProfile?.phone ?? undefined,
+        birth_date: userProfile?.birth_date ?? undefined,
+        display_name: userProfile?.display_name ?? undefined,
+        session_version: userProfile?.session_version ?? 0,
+        iss: env.SITE_DNS,
+        aud: env.SITE_DNS,
       },
       env.JWT_SECRET,
-      jwtExp
+      jwtExp,
+      env.JWT_PRIVATE_KEY_PEM
+        ? {
+            privateKeyPem: env.JWT_PRIVATE_KEY_PEM,
+            kid: env.JWT_JWKS_KID || "k1",
+          }
+        : undefined
     );
 
     // Rotacionar refresh token
-    const refreshDays = env.REFRESH_TOKEN_EXPIRATION_DAYS
-      ? Number(env.REFRESH_TOKEN_EXPIRATION_DAYS)
-      : 30;
+    // refreshDays já aplicado quando a sessão foi criada inicialmente; mantemos a mesma expiração.
 
     const newPlain = await generateRefreshToken(64);
     const newExpires = session.expires_at;
@@ -150,8 +171,10 @@ export async function refreshTokenHandler(
     return jsonResponse(
       {
         access_token,
+        token_type: "Bearer",
         refresh_token: newPlain,
         expires_at: newExpires,
+        display_name: userProfile?.display_name ?? null,
       },
       200
     );

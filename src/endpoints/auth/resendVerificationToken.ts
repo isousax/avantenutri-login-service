@@ -1,7 +1,7 @@
-import type { Env } from "../types/Env";
-import { generateToken } from "../utils/generateToken";
-import { hashToken } from "../utils/hashToken";
-import { sendVerificationEmail } from "../utils/sendVerificationEmail";
+import type { Env } from "../../types/Env";
+import { generateToken } from "../../utils/generateToken";
+import { hashToken } from "../../utils/hashToken";
+import { sendVerificationEmail } from "../../utils/sendVerificationEmail";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json",

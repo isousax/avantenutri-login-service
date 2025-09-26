@@ -1,7 +1,7 @@
-import type { Env } from "../types/Env";
-import { generateToken } from "../utils/generateToken";
-import { hashToken } from "../utils/hashToken";
-import { sendPasswordResetEmail } from "../utils/sendPasswordResetEmail";
+import type { Env } from "../../types/Env";
+import { generateToken } from "../../utils/generateToken";
+import { hashToken } from "../../utils/hashToken";
+import { sendPasswordResetEmail } from "../../utils/sendPasswordResetEmail";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json",
@@ -9,7 +9,11 @@ const JSON_HEADERS = {
   Pragma: "no-cache",
 };
 
-function jsonResponse(body: unknown, status = 200, extra?: Record<string,string>) {
+function jsonResponse(
+  body: unknown,
+  status = 200,
+  extra?: Record<string, string>
+) {
   const headers = { ...JSON_HEADERS, ...(extra || {}) };
   return new Response(JSON.stringify(body), { status, headers });
 }
@@ -21,7 +25,10 @@ function isValidEmail(email: string) {
 const RESEND_COOLDOWN_SEC = 60; // 1 min
 const TOKEN_TTL_MIN = 15;
 
-export async function requestPasswordReset(request: Request, env: Env): Promise<Response> {
+export async function requestPasswordReset(
+  request: Request,
+  env: Env
+): Promise<Response> {
   console.info("[requestPasswordReset] request received");
 
   let body: unknown;
@@ -39,8 +46,9 @@ export async function requestPasswordReset(request: Request, env: Env): Promise<
   }
 
   try {
-    const userRow = await env.DB
-      .prepare("SELECT id, email_confirmed, email FROM users WHERE email = ?")
+    const userRow = await env.DB.prepare(
+      "SELECT id, email_confirmed, email FROM users WHERE email = ?"
+    )
       .bind(email)
       .first<{ id?: string; email_confirmed?: number; email?: string }>();
 
@@ -67,7 +75,9 @@ export async function requestPasswordReset(request: Request, env: Env): Promise<
     }
 
     // cooldown check using created_at
-    const existing = await env.DB.prepare("SELECT created_at FROM password_reset_codes WHERE user_id = ?")
+    const existing = await env.DB.prepare(
+      "SELECT created_at FROM password_reset_codes WHERE user_id = ?"
+    )
       .bind(userRow.id)
       .first<{ created_at?: string }>();
 
@@ -79,7 +89,11 @@ export async function requestPasswordReset(request: Request, env: Env): Promise<
         if (diffSec < RESEND_COOLDOWN_SEC) {
           const retryAfter = RESEND_COOLDOWN_SEC - diffSec;
           console.warn("[requestPasswordReset] resend cooldown active");
-          return jsonResponse({ error: "Too many requests. Try again later." }, 429, { "Retry-After": String(retryAfter) });
+          return jsonResponse(
+            { error: "Too many requests. Try again later." },
+            429,
+            { "Retry-After": String(retryAfter) }
+          );
         }
       }
     }
@@ -97,17 +111,28 @@ export async function requestPasswordReset(request: Request, env: Env): Promise<
          expires_at = excluded.expires_at,
          created_at = CURRENT_TIMESTAMP,
          used = 0`
-    ).bind(userRow.id, tokenHash, expiresAt).run();
+    )
+      .bind(userRow.id, tokenHash, expiresAt)
+      .run();
 
-    const base = `https://${env.SITE_DNS}`
-    const link = `${base}/reset-password?token=${encodeURIComponent(plainToken)}`;
+    const base = `https://${env.SITE_DNS}`;
+    const link = `${base}/reset-password?token=${encodeURIComponent(
+      plainToken
+    )}`;
 
     await sendPasswordResetEmail(env, userRow.email as string, link);
 
-    console.info("[requestPasswordReset] reset email queued for:", userRow.email);
+    console.info(
+      "[requestPasswordReset] reset email queued for:",
+      userRow.email
+    );
     return jsonResponse({ ok: true }, 200);
   } catch (err: any) {
-    console.error("[requestPasswordReset] unexpected error:", err?.message ?? err, err?.stack);
+    console.error(
+      "[requestPasswordReset] unexpected error:",
+      err?.message ?? err,
+      err?.stack
+    );
     return jsonResponse({ error: "Internal Server Error" }, 500);
   }
 }

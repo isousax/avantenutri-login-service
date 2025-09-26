@@ -143,22 +143,23 @@ export async function sendVerificationEmail(
     <div class="container">
         <div class="header">
             <div class="logo">Avante Nutri</div>
-            <div style="font-size: 24px; font-weight: 300;">Confirme seu e-mail</div>
+            <div style="font-size: 22px; font-weight: 300;">Confirme seu e-mail</div>
         </div>
         
         <div class="content">
             <div class="greeting">Olá,</div>
             
             <div class="message">
-                Seja bem-vindo(a) à <strong>Avante Nutri</strong>! 🌱<br>
-                Para começar sua jornada rumo a uma vida mais saudável e equilibrada, confirme seu e-mail.
+                Bem-vindo(a) à <strong>Avante Nutri</strong>! 🌱<br>
+                Aqui, acreditamos que pequenas mudanças geram grandes transformações.<br>
+                Para começar sua jornada, confirme seu e-mail.
             </div>
 
             <div class="button-container">
-                <a href="${link}" class="confirm-button">Confirmar E-mail</a>
+                <a href="${link}" class="confirm-button" target="_blank">Confirmar E-mail</a>
             </div>
 
-            <div class="message" style="text-align: center; font-size: 14px;">
+            <div class="message" style="text-align: center; font-size: 15px;">
                 <strong>Este link expira em 15 minutos</strong><br>
                 Por questões de segurança, o link de confirmação tem validade limitada.
             </div>

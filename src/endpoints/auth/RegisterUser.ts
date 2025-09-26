@@ -281,10 +281,19 @@ export async function registerUser(
     }
 
     // --- No existing user: create new user (original flow) ---
+    // Determina role inicial: somente o email que corresponde a INITIAL_ADMIN_EMAIL-> admin
+    let initialRole: "patient" | "admin" = "patient";
+    if (
+      env.INITIAL_ADMIN_EMAIL &&
+      env.INITIAL_ADMIN_EMAIL.toLowerCase() === email.toLowerCase()
+    ) {
+      initialRole = "admin";
+    }
+
     const userRow = await env.DB.prepare(
-      "INSERT INTO users (email, password_hash, role, created_at, email_confirmed) VALUES (?, ?, 'patient', CURRENT_TIMESTAMP, 0) RETURNING id"
+      "INSERT INTO users (email, password_hash, role, created_at, email_confirmed) VALUES (?, ?, ?, CURRENT_TIMESTAMP, 0) RETURNING id"
     )
-      .bind(email, passwordHash)
+      .bind(email, passwordHash, initialRole)
       .first<DBUser>();
 
     if (!userRow || !userRow.id) {
@@ -307,8 +316,7 @@ export async function registerUser(
       .run();
 
     console.info(
-      "[registerUser] usuário registrado com sucesso: ",
-      maskedEmail
+      `{registerUser} usuário registrado com sucesso: ${maskedEmail} role=${initialRole}`
     );
 
     // create verification token (store only hash)

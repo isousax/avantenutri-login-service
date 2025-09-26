@@ -52,7 +52,8 @@ export async function meHandler(request: Request, env: Env): Promise<Response> {
               p.full_name, p.phone, p.birth_date, p.photo_url
        FROM users u
        LEFT JOIN user_profiles p ON p.user_id = u.id
-       WHERE u.id = ?`
+       WHERE u.id = ?
+       LIMIT 1`
     )
       .bind(userId)
       .first<
@@ -102,7 +103,7 @@ export async function meHandler(request: Request, env: Env): Promise<Response> {
       photo_url: row.photo_url ?? null,
     };
 
-    return jsonResponse(user, 200);
+    return jsonResponse({ user }, 200);
   } catch (err: any) {
     console.error("[meHandler] unexpected error:", err?.message ?? err);
     return jsonResponse({ error: "Internal Server Error" }, 500);

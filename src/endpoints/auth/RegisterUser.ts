@@ -20,7 +20,9 @@ interface DBUser {
 
 const JSON_HEADERS = {
   "Content-Type": "application/json",
+  "Access-Control-Allow-Credentials": "true",
   "Cache-Control": "no-store",
+
   Pragma: "no-cache",
 };
 

@@ -23,6 +23,7 @@ function getCorsHeaders(env: Env, requestId?: string) {
     "Access-Control-Allow-Origin": env.SITE_DNS,
     "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-Id, X-Api-Key",
+    "Content-Security-Policy": "frame-ancestors 'none';",
     ...(requestId ? { "X-Request-Id": requestId } : {}),
   };
 }
@@ -37,16 +38,18 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/auth/.well-known/jwks.json') {
-      const r = await jwksHandler(env);
-      r.headers.set('Access-Control-Allow-Origin', env.SITE_DNS);
-      r.headers.set('X-Request-Id', requestId);
-      return r;
+      const res = await jwksHandler(env);
+      res.headers.set('Access-Control-Allow-Origin', env.SITE_DNS);
+      res.headers.set('X-Request-Id', requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
     }
 
     if (request.method === "POST" && url.pathname === "/auth/register") {
       const res = await registerUser(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -57,6 +60,7 @@ export default {
       const res = await confirmVerificationToken(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -67,6 +71,7 @@ export default {
       const res = await resendVerificationCode(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -74,6 +79,7 @@ export default {
       const res = await loginUser(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -81,6 +87,7 @@ export default {
       const res = await meHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -88,6 +95,7 @@ export default {
       const res = await refreshTokenHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -95,6 +103,7 @@ export default {
       const res = await logoutHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -102,6 +111,7 @@ export default {
       const res = await requestPasswordReset(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -109,6 +119,7 @@ export default {
       const res = await resetPassword(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -116,6 +127,7 @@ export default {
       const res = await changePasswordHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -123,6 +135,7 @@ export default {
       const res = await updateProfileHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -130,6 +143,7 @@ export default {
       const res = await adminAuditHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -137,6 +151,7 @@ export default {
       const res = await entitlementsHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -144,6 +159,7 @@ export default {
       const res = await adminChangeRoleHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -151,6 +167,7 @@ export default {
       const res = await adminListUsersHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 
@@ -158,6 +175,7 @@ export default {
       const res = await adminForceLogoutHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
 

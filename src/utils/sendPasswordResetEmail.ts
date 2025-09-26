@@ -175,7 +175,6 @@ export async function sendPasswordResetEmail(
                     <li>Você será direcionado para uma página segura</li>
                     <li>Poderá criar uma nova senha</li>
                     <li>Receberá uma confirmação por e-mail</li>
-                    <li>Poderá acessar sua conta normalmente</li>
                 </ol>
             </div>
 

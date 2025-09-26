@@ -83,7 +83,7 @@ export default {
       return res;
     }
 
-    if (request.method === "POST" && url.pathname === "/auth/me") {
+    if (request.method === "GET" && url.pathname === "/auth/me") {
       const res = await meHandler(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);

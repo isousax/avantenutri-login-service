@@ -179,15 +179,15 @@ export async function registerUser(
 
         if (birth_date) {
           await env.DB.prepare(
-            "INSERT INTO user_profiles (user_id, full_name, display_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            "INSERT INTO user_profiles (user_id, full_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
           )
-            .bind(existing.id, full_name, displayName, phone, birth_date)
+            .bind(existing.id, full_name, phone, birth_date)
             .run();
         } else {
           await env.DB.prepare(
-            "INSERT INTO user_profiles (user_id, full_name, display_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            "INSERT INTO user_profiles (user_id, full_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
           )
-            .bind(existing.id, full_name, displayName, phone)
+            .bind(existing.id, full_name, phone)
             .run();
         }
 

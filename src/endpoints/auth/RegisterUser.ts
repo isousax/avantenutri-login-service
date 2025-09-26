@@ -10,7 +10,7 @@ interface RegisterRequestBody {
   password: string;
   full_name: string;
   phone: string;
-  birth_date: string;
+  birth_date?: string;
 }
 
 interface DBUser {
@@ -57,7 +57,7 @@ export async function registerUser(
   const { email, password, full_name, phone, birth_date } =
     body as RegisterRequestBody;
 
-  if (!email || !password || !full_name || !phone || !birth_date) {
+  if (!email || !password || !full_name || !phone) {
     console.warn("[registerUser] corpo de solicitação malformado");
     return jsonResponse(
       { error: "Preencha todos os campos obrigatórios antes de continuar." },
@@ -84,7 +84,7 @@ export async function registerUser(
       400
     );
   }
-  if (isNaN(Date.parse(birth_date))) {
+  if (birth_date && isNaN(Date.parse(birth_date))) {
     console.warn("[registerUser] data de nascimento inválida:", birth_date);
     return jsonResponse(
       {
@@ -185,11 +185,19 @@ export async function registerUser(
           .bind(existing.id)
           .run();
 
-        await env.DB.prepare(
-          "INSERT INTO user_profiles (user_id, full_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
-        )
-          .bind(existing.id, full_name, phone, birth_date)
-          .run();
+        if (birth_date) {
+          await env.DB.prepare(
+            "INSERT INTO user_profiles (user_id, full_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+          )
+            .bind(existing.id, full_name, phone, birth_date)
+            .run();
+        } else {
+          await env.DB.prepare(
+            "INSERT INTO user_profiles (user_id, full_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+          )
+            .bind(existing.id, full_name, phone)
+            .run();
+        }
 
         // Now create new verification token and send email (below)
         // set createdUser.id for reuse
@@ -309,15 +317,19 @@ export async function registerUser(
     const createdUser = userRow;
 
     // insert profile
-    await env.DB.prepare(
-      "INSERT INTO user_profiles (user_id, full_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
-    )
-      .bind(createdUser.id, full_name, phone, birth_date)
-      .run();
-
-    console.info(
-      `{registerUser} usuário registrado com sucesso: ${maskedEmail} role=${initialRole}`
-    );
+    if (birth_date) {
+      await env.DB.prepare(
+        "INSERT INTO user_profiles (user_id, full_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+      )
+        .bind(createdUser.id, full_name, phone, birth_date)
+        .run();
+    } else {
+      await env.DB.prepare(
+        "INSERT INTO user_profiles (user_id, full_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+      )
+        .bind(createdUser.id, full_name, phone)
+        .run();
+    }
 
     // create verification token (store only hash)
     const plainToken = generateToken(32);

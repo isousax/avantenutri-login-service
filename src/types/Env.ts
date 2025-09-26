@@ -19,6 +19,8 @@ export interface Env {
   JWT_PRIVATE_KEY_PEM?: string; // chave privada PKCS8 (BEGIN PRIVATE KEY)
   JWT_PUBLIC_KEY_PEM?: string; // chave pública (BEGIN PUBLIC KEY)
   JWT_JWKS_KID?: string; // identificador da chave no JWKS (default k1)
+  JWT_EXPECTED_ISSUER?: string;
+  JWT_EXPECTED_AUDIENCE?: string;
   BREVO_API_KEY?: string;
   EMAIL_FROM?: string;
   EMAIL_REPLY_TO?: string;

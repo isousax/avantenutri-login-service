@@ -104,16 +104,6 @@ export async function registerUser(
       400
     );
   }
-  if (!env.JWT_SECRET) {
-    console.error("[registerUser] JWT_SECRET ausente no ambiente");
-    return jsonResponse(
-      {
-        error:
-          "Algo deu errado no servidor. Por favor, tente novamente mais tarde.",
-      },
-      500
-    );
-  }
 
   const maskedEmail = (() => {
     try {
@@ -125,6 +115,8 @@ export async function registerUser(
       return "unknown";
     }
   })();
+
+  const displayName = full_name.trim().split(" ")[0];
 
   console.info("[registerUser] registrando:", maskedEmail);
 
@@ -187,15 +179,15 @@ export async function registerUser(
 
         if (birth_date) {
           await env.DB.prepare(
-            "INSERT INTO user_profiles (user_id, full_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            "INSERT INTO user_profiles (user_id, full_name, display_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
           )
-            .bind(existing.id, full_name, phone, birth_date)
+            .bind(existing.id, full_name, displayName, phone, birth_date)
             .run();
         } else {
           await env.DB.prepare(
-            "INSERT INTO user_profiles (user_id, full_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            "INSERT INTO user_profiles (user_id, full_name, display_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
           )
-            .bind(existing.id, full_name, phone)
+            .bind(existing.id, full_name, displayName, phone)
             .run();
         }
 
@@ -319,15 +311,15 @@ export async function registerUser(
     // insert profile
     if (birth_date) {
       await env.DB.prepare(
-        "INSERT INTO user_profiles (user_id, full_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        "INSERT INTO user_profiles (user_id, full_name, display_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
       )
-        .bind(createdUser.id, full_name, phone, birth_date)
+        .bind(createdUser.id, full_name, displayName, phone, birth_date)
         .run();
     } else {
       await env.DB.prepare(
-        "INSERT INTO user_profiles (user_id, full_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        "INSERT INTO user_profiles (user_id, full_name, display_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
       )
-        .bind(createdUser.id, full_name, phone)
+        .bind(createdUser.id, full_name, displayName, phone)
         .run();
     }
 

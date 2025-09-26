@@ -150,9 +150,8 @@ export async function sendVerificationEmail(
             <div class="greeting">Olá,</div>
             
             <div class="message">
-                Seja bem-vindo(a) à <strong>Avante Nutri</strong>!🌱 <br>
-                Estamos empolgados em te acompanhar na sua jornada para uma vida mais saudável e equilibrada. 
-                Para começar, precisamos confirmar seu endereço de e-mail.
+                Seja bem-vindo(a) à <strong>Avante Nutri</strong>! 🌱<br>
+                Para começar sua jornada rumo a uma vida mais saudável e equilibrada, confirme seu e-mail.
             </div>
 
             <div class="button-container">

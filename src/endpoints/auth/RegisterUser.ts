@@ -18,6 +18,16 @@ interface DBUser {
   email_confirmed?: number;
 }
 
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store",
+  Pragma: "no-cache",
+};
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+}
+
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -32,22 +42,6 @@ export async function registerUser(
   env: Env
 ): Promise<Response> {
   console.info("[registerUser] solicitação recebida");
-
-  const JSON_HEADERS = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": env.SITE_DNS,
-    "Access-Control-Allow-Credentials": "true",
-    "Cache-Control": "no-store",
-
-    Pragma: "no-cache",
-  };
-
-  function jsonResponse(body: unknown, status = 200) {
-    return new Response(JSON.stringify(body), {
-      status,
-      headers: JSON_HEADERS,
-    });
-  }
 
   let body: unknown;
   try {

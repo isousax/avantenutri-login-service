@@ -10,21 +10,26 @@ interface LogoutRequestBody {
   refresh_token: string;
 }
 
-const JSON_HEADERS = {
-  "Content-Type": "application/json",
-  "Cache-Control": "no-store",
-  Pragma: "no-cache",
-};
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
 export async function logoutHandler(
   request: Request,
   env: Env
 ): Promise<Response> {
   console.info("[logoutHandler] solicitação recebida");
+
+  const JSON_HEADERS = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": env.SITE_DNS,
+    "Access-Control-Allow-Credentials": "true",
+    "Cache-Control": "no-store",
+    Pragma: "no-cache",
+  };
+  
+  function jsonResponse(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: JSON_HEADERS,
+    });
+  }
 
   let body: unknown;
   try {

@@ -195,6 +195,12 @@ export default {
     return new Response(JSON.stringify({ error: "Not Found" }), {
       status: 404,
       headers: {
+        "Access-Control-Allow-Origin": env.SITE_DNS,
+        "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Headers":
+          "Content-Type, Authorization, X-Request-Id, X-Api-Key",
+        "Content-Security-Policy": "frame-ancestors 'none';",
         "Content-Type": "application/json",
         "X-Request-Id": requestId,
       },

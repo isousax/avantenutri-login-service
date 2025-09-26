@@ -99,15 +99,14 @@ CREATE TABLE IF NOT EXISTS password_change_log (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_password_change_user ON password_change_log(user_id);
-
 -- Revogação de access tokens (lista de JTI) No futuro, adicionar rotina de limpeza para remover revoked_jti cujo expires_At passou. 
 CREATE TABLE IF NOT EXISTS revoked_jti (
   jti TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   revoked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   reason TEXT,
-  expires_at TIMESTAMP,  -- quando o token expiraria (usado para GC)
+  expires_at TIMESTAMP,
+  -- quando o token expiraria (usado para GC)
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
@@ -117,7 +116,8 @@ CREATE TABLE IF NOT EXISTS role_change_log (
   user_id TEXT NOT NULL,
   old_role TEXT,
   new_role TEXT NOT NULL,
-  changed_by TEXT,   -- admin user id ou sistema
+  changed_by TEXT,
+  -- admin user id ou sistema
   reason TEXT,
   changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -143,3 +143,5 @@ CREATE INDEX IF NOT EXISTS idx_password_reset_expires ON password_reset_codes(ex
 CREATE INDEX IF NOT EXISTS idx_role_change_user ON role_change_log(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_revoked_jti_user ON revoked_jti(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_password_change_user ON password_change_log(user_id);

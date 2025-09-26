@@ -156,7 +156,7 @@ export async function sendPasswordResetEmail(
             <div class="greeting">Olá,</div>
             
             <div class="message">
-                Recebemos uma solicitação para redefinir a senha da sua conta na Avante Nutri. 
+                Recebemos uma solicitação para redefinir a senha da sua conta na <strong>Avante Nutri</strong>. 
                 Para continuar com o processo, clique no botão abaixo:
             </div>
 
@@ -194,7 +194,7 @@ export async function sendPasswordResetEmail(
         </div>
         
         <div class="footer">
-            <div>Avante Nutri - Transformando vidas através da nutrição</div>
+            <div><strong>Avante Nutri</strong> - Nutrindo hábitos, transformando vidas 💚</div>
             <div class="contact">
                 Dúvidas sobre segurança? Entre em contato: 
                 <a href="mailto:souzacawanne@gmail.com" style="color: #f59e0b; text-decoration: none;">

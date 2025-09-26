@@ -150,8 +150,9 @@ export async function sendVerificationEmail(
             <div class="greeting">Olá,</div>
             
             <div class="message">
-                Obrigado por se cadastrar na Avante Nutri! Para ativar sua conta e começar sua 
-                jornada rumo a uma vida mais saudável, precisamos confirmar seu endereço de e-mail.
+                Seja bem-vindo(a) à <strong>Avante Nutri</strong>!🌱 <br>
+                Estamos empolgados em te acompanhar na sua jornada para uma vida mais saudável e equilibrada. 
+                Para começar, precisamos confirmar seu endereço de e-mail.
             </div>
 
             <div class="button-container">
@@ -164,20 +165,20 @@ export async function sendVerificationEmail(
             </div>
 
             <div class="warning">
-                <strong>⚠️ Não solicitou este e-mail?</strong><br>
+                <strong>⚠️ Não foi você?</strong><br>
                 Se você não se cadastrou na Avante Nutri, ignore esta mensagem. 
                 Seu e-mail será automaticamente removido de nossos registros.
             </div>
 
             <div style="font-size: 14px; color: #6b7280; margin-top: 30px;">
                 <strong>Problemas com o botão?</strong><br>
-                Se o botão acima não funcionar, copie e cole o link abaixo em seu navegador:
+                Copie e cole o link abaixo em seu navegador:
             </div>
             <div class="link-backup">${link}</div>
         </div>
         
         <div class="footer">
-            <div>Avante Nutri - Transformando vidas através da nutrição</div>
+            <div><strong>Avante Nutri</strong> - Nutrindo hábitos, transformando vidas 💚</div>
             <div class="contact">
                 Dúvidas? Entre em contato: 
                 <a href="mailto:souzacawanne@gmail.com" style="color: #10b981; text-decoration: none;">

@@ -20,7 +20,7 @@ import { meHandler } from "./endpoints/user/me";
 import { ensureRequestId } from "./middleware/requestId";
 function getCorsHeaders(env: Env, requestId?: string) {
   return {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": env.SITE_DNS,
     "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-Id, X-Api-Key",
     ...(requestId ? { "X-Request-Id": requestId } : {}),
@@ -72,7 +72,7 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/auth/login") {
       const res = await loginUser(request, env);
-      res.headers.set("Access-Control-Allow-Origin", "*");
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
       return res;
     }

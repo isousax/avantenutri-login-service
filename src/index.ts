@@ -72,7 +72,7 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/auth/login") {
       const res = await loginUser(request, env);
-      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      res.headers.set("Access-Control-Allow-Origin", "*");
       res.headers.set("X-Request-Id", requestId);
       return res;
     }

@@ -18,6 +18,7 @@ import { entitlementsHandler } from "./endpoints/utils/entitlements";
 import type { Env } from "./types/Env";
 import { meHandler } from "./endpoints/user/me";
 import { ensureRequestId } from "./middleware/requestId";
+import { introspection } from "./endpoints/auth/introspection";
 function getCorsHeaders(env: Env, requestId?: string) {
   return {
     "Access-Control-Allow-Origin": env.SITE_DNS,
@@ -44,6 +45,14 @@ export default {
       url.pathname === "/auth/.well-known/jwks.json"
     ) {
       const res = await jwksHandler(env);
+      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+
+    if (request.method === "POST" && url.pathname === "/auth/introspect") {
+      const res = await introspection(request, env);
       res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");

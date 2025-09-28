@@ -25,4 +25,8 @@ export interface Env {
   EMAIL_FROM?: string;
   EMAIL_REPLY_TO?: string;
   INITIAL_ADMIN_EMAIL?: string;
+  // Mercado Pago credentials
+  MP_PUBLIC_KEY?: string; // usada no frontend (exposta via endpoint seguro)
+  MP_ACCESS_TOKEN?: string; // server-side secret for Payments API
+  MP_WEBHOOK_SECRET?: string; // shared secret to verify webhook signatures
 }

@@ -83,7 +83,7 @@ import { buildDynamicSitemap } from "./sitemap/dynamicSitemap";
 import { getDynamicCorsOrigin } from "./utils/getDynamicCorsOrigin";
 function getCorsHeaders(env: Env, requestId?: string) {
   return {
-    "Access-Control-Allow-Origin": env.SITE_DNS,
+    "Access-Control-Allow-Origin": "*",// env.SITE_DNS,
     "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, PUT, OPTIONS",
     "Access-Control-Allow-Credentials": "true",
     "Access-Control-Allow-Headers":

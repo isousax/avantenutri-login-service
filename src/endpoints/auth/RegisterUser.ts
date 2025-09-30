@@ -3,6 +3,7 @@ import { getClientIp, clearAttempts } from "../../service/authAttempts";
 import { generateToken } from "../../utils/generateToken";
 import { hashToken } from "../../utils/hashToken";
 import { sendVerificationEmail } from "../../utils/sendVerificationEmail";
+import { normalizePhone, phoneErrorMessage } from "../../utils/normalizePhone";
 import type { Env } from "../../types/Env";
 
 interface RegisterRequestBody {
@@ -94,16 +95,17 @@ export async function registerUser(
       400
     );
   }
-  if (!PHONE_E164_REGEX.test(phone)) {
-    console.warn("[registerUser] telefone inválido (esperado E.164):", phone);
-    return jsonResponse(
-      {
-        error:
-          "O número de telefone informado é inválido. Certifique-se de incluir o DDD.",
-      },
-      400
+  // Nova validação/normalização de telefone
+  const phoneNorm = normalizePhone(phone, 'BR');
+  if (!phoneNorm.ok || !phoneNorm.normalized) {
+    console.warn(
+      "[registerUser] telefone inválido após normalização:",
+      phone,
+      phoneNorm.reason
     );
+    return jsonResponse({ error: phoneErrorMessage(phoneNorm.reason) }, 400);
   }
+  const normalizedPhone = phoneNorm.normalized;
 
   const maskedEmail = (() => {
     try {
@@ -181,13 +183,13 @@ export async function registerUser(
           await env.DB.prepare(
             "INSERT INTO user_profiles (user_id, full_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
           )
-            .bind(existing.id, full_name, phone, birth_date)
+            .bind(existing.id, full_name, normalizedPhone, birth_date)
             .run();
         } else {
           await env.DB.prepare(
             "INSERT INTO user_profiles (user_id, full_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
           )
-            .bind(existing.id, full_name, phone)
+            .bind(existing.id, full_name, normalizedPhone)
             .run();
         }
 
@@ -309,17 +311,18 @@ export async function registerUser(
     const createdUser = userRow;
 
     // insert profile
+    // FIX: corrigido número de placeholders (antes faltavam '?') causando erro 500 na primeira tentativa de registro
     if (birth_date) {
       await env.DB.prepare(
-        "INSERT INTO user_profiles (user_id, full_name, display_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        "INSERT INTO user_profiles (user_id, full_name, display_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
       )
-        .bind(createdUser.id, full_name, displayName, phone, birth_date)
+        .bind(createdUser.id, full_name, displayName, normalizedPhone, birth_date)
         .run();
     } else {
       await env.DB.prepare(
-        "INSERT INTO user_profiles (user_id, full_name, display_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        "INSERT INTO user_profiles (user_id, full_name, display_name, phone, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
       )
-        .bind(createdUser.id, full_name, displayName, phone)
+        .bind(createdUser.id, full_name, displayName, normalizedPhone)
         .run();
     }
 

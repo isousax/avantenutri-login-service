@@ -28,8 +28,10 @@ export async function reviseDietPlanHandler(request: Request, env: Env): Promise
   let body:any; try { body = await request.json(); } catch { body = {}; }
   const { notes, dataPatch } = body || {};
 
-  // Capability check
+  // Capability + role check (apenas admin pode revisar dietas de pacientes)
   const ent = await computeEffectiveEntitlements(env, userId);
+  const roleRow = await env.DB.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first<{ role?: string }>();
+  if (roleRow?.role !== 'admin') return json({ error: 'Forbidden (admin only)' }, 403);
   if (!ent.capabilities.includes('DIETA_EDIT')) return json({ error: 'Forbidden (missing DIETA_EDIT)' }, 403);
 
   // Revision limit enforcement (monthly)
@@ -37,10 +39,11 @@ export async function reviseDietPlanHandler(request: Request, env: Env): Promise
   if (limit <= 0) return json({ error: 'Limite de revisões atingido para seu plano' }, 403);
   const { start, end } = currentMonthRange();
   try {
-    const existingPlan = await env.DB.prepare('SELECT id, user_id, current_version_id FROM diet_plans WHERE id = ? AND user_id = ? AND status = "active"')
-      .bind(planId, userId)
+    // Admin revisa planos de qualquer paciente; permitir plano de outro usuário quando admin
+    const existingPlan = await env.DB.prepare('SELECT id, user_id, current_version_id FROM diet_plans WHERE id = ? AND status = "active"')
+      .bind(planId)
       .first<any>();
-    if (!existingPlan?.id) return json({ error: 'Plano não encontrado' }, 404);
+    if (!existingPlan?.id) return json({ error: 'Plano não encontrado ou inativo' }, 404);
 
     // Count revisions (versions beyond #1) this month
     const countRow = await env.DB.prepare(`SELECT COUNT(1) as c FROM diet_plan_versions 
@@ -56,7 +59,32 @@ export async function reviseDietPlanHandler(request: Request, env: Env): Promise
       .first<{ version_number?: number; data_json?: string }>();
     const nextNumber = (lastV?.version_number || 0) + 1;
     let baseData: any = {}; try { baseData = JSON.parse(lastV?.data_json || '{}'); } catch { baseData = {}; }
-    const merged = { ...baseData, ...(dataPatch || {}) };
+    let merged = { ...baseData, ...(dataPatch || {}) } as any;
+    if (dataPatch?.format === 'pdf' && dataPatch?.file?.base64) {
+      try {
+        const b64 = dataPatch.file.base64 as string;
+        if (b64.length * 0.75 > 5 * 1024 * 1024) {
+          return json({ error: 'PDF excede limite de 5MB' }, 400);
+        }
+        const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        const originalName: string = dataPatch.file.name || `plano-${planId}-v${nextNumber}.pdf`;
+        const safeName = originalName.toLowerCase().replace(/[^a-z0-9._-]/g,'_');
+        const key = `diet-plans/${planId}/v${nextNumber}/${Date.now()}-${safeName}`;
+        if (env.DIET_FILES) {
+          await env.DIET_FILES.put(key, bytes, { httpMetadata: { contentType: 'application/pdf' } });
+          merged.file = { key, name: originalName, mime: 'application/pdf' };
+        } else {
+          delete merged.file?.base64;
+          if (merged.file) merged.file.inline_disabled = true;
+        }
+      } catch (err:any) {
+        console.error('[diet pdf upload revise] error', err?.message || err);
+        return json({ error: 'Falha ao processar PDF' }, 500);
+      }
+    } else if (merged?.file?.base64) {
+      // Se veio base64 mas format não é pdf, remover para evitar armazenar inline acidental
+      delete merged.file.base64;
+    }
     const newVid = crypto.randomUUID();
 
     await env.DB.prepare('INSERT INTO diet_plan_versions (id, plan_id, version_number, generated_by, data_json, notes) VALUES (?, ?, ?, "user", ?, ?)')

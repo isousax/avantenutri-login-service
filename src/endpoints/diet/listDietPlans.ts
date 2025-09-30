@@ -16,12 +16,33 @@ export async function listDietPlansHandler(request: Request, env: Env): Promise<
   const userId = payload.sub;
   const url = new URL(request.url);
   const includeArchived = url.searchParams.get('archived') === '1';
+  const targetUser = url.searchParams.get('user_id'); // admin pode filtrar por paciente
   try {
-    const rows = await env.DB.prepare(`SELECT id, name, description, status, start_date, end_date, results_summary, current_version_id, created_at, updated_at
-                                       FROM diet_plans WHERE user_id = ? ${includeArchived ? '' : "AND status = 'active'"} ORDER BY created_at DESC`)
-      .bind(userId)
+    // Verifica se solicitante é admin quando quiser ver outros usuários
+    let roleRow: { role?: string } | null = null;
+    if (targetUser && targetUser !== userId) {
+      roleRow = await env.DB.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first<{ role?: string }>();
+      if (roleRow?.role !== 'admin') {
+        return json({ error: 'Forbidden (admin only for cross-user listing)' }, 403);
+      }
+    }
+    const queryUser = targetUser && targetUser !== userId ? targetUser : userId;
+    const rows = await env.DB.prepare(`SELECT dp.id, dp.user_id, dp.name, dp.description, dp.status, dp.start_date, dp.end_date, dp.results_summary, dp.current_version_id, dp.created_at, dp.updated_at, dv.data_json as current_data_json
+                                       FROM diet_plans dp
+                                       LEFT JOIN diet_plan_versions dv ON dv.id = dp.current_version_id
+                                       WHERE dp.user_id = ? ${includeArchived ? '' : "AND dp.status = 'active'"}
+                                       ORDER BY dp.created_at DESC`)
+      .bind(queryUser)
       .all<any>();
-    return json({ ok: true, results: rows.results || [] });
+    const results = (rows.results || []).map(r => {
+      let format: string | undefined;
+      if (r.current_data_json) {
+        try { const parsed = JSON.parse(r.current_data_json); format = parsed?.format; } catch { /* ignore */ }
+      }
+      const { current_data_json, ...rest } = r;
+      return { ...rest, format };
+    });
+    return json({ ok: true, results });
   } catch (err: any) {
     console.error('[listDietPlans] error', err?.message || err);
     return json({ error: 'Internal Server Error' }, 500);

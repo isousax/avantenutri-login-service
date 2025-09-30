@@ -295,6 +295,7 @@ CREATE TABLE IF NOT EXISTS blog_posts (
   title TEXT NOT NULL,
   excerpt TEXT,
   content_html TEXT NOT NULL,
+  content_md TEXT, -- optional original markdown (added to align with backend insert/update)
   author_name TEXT,
   author_id TEXT,
   category TEXT,
@@ -500,6 +501,7 @@ CREATE TABLE IF NOT EXISTS consultation_availability_rules (
   slot_duration_min INTEGER NOT NULL DEFAULT 40,
   max_parallel INTEGER NOT NULL DEFAULT 1,
   active INTEGER NOT NULL DEFAULT 1,
+  deleted_at TIMESTAMP, -- soft delete marker (NULL = active/inactive but existing)
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -519,6 +521,29 @@ CREATE TABLE IF NOT EXISTS consultation_blocked_slots (
 
 CREATE INDEX IF NOT EXISTS idx_consultation_avail_weekday ON consultation_availability_rules(weekday);
 CREATE INDEX IF NOT EXISTS idx_consultation_blocked_slot_start ON consultation_blocked_slots(slot_start);
+
+-- Availability rule audit log
+CREATE TABLE IF NOT EXISTS availability_rule_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  rule_id TEXT NOT NULL,
+  action TEXT NOT NULL, -- create | update | activate | deactivate | delete
+  weekday INTEGER,
+  start_time TEXT,
+  end_time TEXT,
+  slot_duration_min INTEGER,
+  max_parallel INTEGER,
+  active INTEGER,
+  snapshot_json TEXT, -- optional full snapshot for future extensibility
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_availability_rule_log_rule ON availability_rule_log(rule_id);
+CREATE INDEX IF NOT EXISTS idx_availability_rule_log_action ON availability_rule_log(action);
+CREATE INDEX IF NOT EXISTS idx_availability_rule_log_weekday ON availability_rule_log(weekday);
+CREATE INDEX IF NOT EXISTS idx_availability_rule_log_created_at ON availability_rule_log(created_at DESC);
+-- Composite indexes to assist combined sorts / filters
+CREATE INDEX IF NOT EXISTS idx_availability_rule_log_action_created ON availability_rule_log(action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_availability_rule_log_weekday_created ON availability_rule_log(weekday, created_at DESC);
 
 -- ===================================================================
 -- QUESTIONNAIRE (initial patient questionnaire)

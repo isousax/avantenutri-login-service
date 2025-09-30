@@ -20,11 +20,17 @@ export async function getDietPlanHandler(request: Request, env: Env): Promise<Re
   if (!planId) return json({ error: 'Missing plan id' }, 400);
 
   try {
+    // Buscar plano independente primeiro
     const plan = await env.DB.prepare(`SELECT id, user_id, name, description, status, start_date, end_date, results_summary, current_version_id, created_at, updated_at
-                                       FROM diet_plans WHERE id = ? AND user_id = ? LIMIT 1`)
-      .bind(planId, userId)
+                                       FROM diet_plans WHERE id = ? LIMIT 1`)
+      .bind(planId)
       .first<any>();
     if (!plan?.id) return json({ error: 'Plano não encontrado' }, 404);
+    if (plan.user_id !== userId) {
+      // Validar se solicitante é admin
+      const roleRow = await env.DB.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first<{ role?: string }>();
+      if (roleRow?.role !== 'admin') return json({ error: 'Forbidden' }, 403);
+    }
 
     const versionsRes = await env.DB.prepare(`SELECT id, version_number, generated_by, data_json, notes, created_at
                                               FROM diet_plan_versions WHERE plan_id = ? ORDER BY version_number ASC`)

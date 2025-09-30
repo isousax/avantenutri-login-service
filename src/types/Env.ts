@@ -1,6 +1,7 @@
 import type {
   D1Database as CF_D1Database,
   D1PreparedStatement as CF_D1PreparedStatement,
+  R2Bucket
 } from "@cloudflare/workers-types";
 
 export type D1PreparedStatement = CF_D1PreparedStatement;
@@ -29,4 +30,6 @@ export interface Env {
   MP_PUBLIC_KEY?: string; // usada no frontend (exposta via endpoint seguro)
   MP_ACCESS_TOKEN?: string; // server-side secret for Payments API
   MP_WEBHOOK_SECRET?: string; // shared secret to verify webhook signatures
+  // R2 bucket para armazenar PDFs de dietas
+  DIET_FILES?: R2Bucket; // binding opcional - se ausente, PDFs permanecem inline (evitar em produção)
 }

@@ -14,7 +14,8 @@ export async function adminListAvailabilityHandler(request: Request, env: Env): 
   const clauses: string[] = [];
   const values: any[] = [];
   if (weekday !== null) { clauses.push('weekday = ?'); values.push(Number(weekday)); }
-  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  clauses.push('deleted_at IS NULL');
+  const where = `WHERE ${clauses.join(' AND ')}`;
   try {
     const rows = await env.DB.prepare(`SELECT * FROM consultation_availability_rules ${where} ORDER BY weekday, start_time`)
       .bind(...values)

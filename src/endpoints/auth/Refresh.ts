@@ -12,11 +12,14 @@ interface RefreshRequestBody {
 }
 
 interface DBUserProfile {
+  email?: string | null;
   full_name?: string | null;
   phone?: string | null;
   birth_date?: string | null;
   role?: string | null;
   email_confirmed?: number | null;
+  session_version?: number | null;
+  display_name?: string | null;
 }
 
 const JSON_HEADERS = {
@@ -81,19 +84,17 @@ export async function refreshTokenHandler(
       return jsonResponse({ error: "Refresh token expired" }, 401);
     }
 
+    // IMPORTANTE: findSessionByRefreshToken NÃO retorna email; evitar bind undefined.
+    // Buscar dados do usuário usando user_id da sessão (não o email).
     const userProfile = await env.DB.prepare(
-      `SELECT u.role, u.email_confirmed, u.session_version, u.display_name, p.full_name, p.phone, p.birth_date
+      `SELECT u.email, u.role, u.email_confirmed, u.session_version, u.display_name,
+              p.full_name, p.phone, p.birth_date
          FROM users u
          LEFT JOIN user_profiles p ON p.user_id = u.id
-         WHERE u.email = ?`
+         WHERE u.id = ?`
     )
-      .bind(session.email)
-      .first<
-        DBUserProfile & {
-          session_version?: number;
-          display_name?: string | null;
-        }
-      >();
+      .bind(session.user_id)
+      .first<DBUserProfile>();
 
     if (userProfile && (userProfile as any).email_confirmed !== 1) {
       console.warn(
@@ -115,7 +116,7 @@ export async function refreshTokenHandler(
     const access_token = await generateJWT(
       {
         sub: session.user_id,
-        email: session.email ?? undefined,
+        email: userProfile?.email ?? undefined,
         role: userProfile?.role ?? undefined,
         full_name: userProfile?.full_name ?? undefined,
         phone: userProfile?.phone ?? undefined,
@@ -153,13 +154,8 @@ export async function refreshTokenHandler(
     );
 
     try {
-      const userRow = await env.DB.prepare(
-        "SELECT email FROM users WHERE id = ?"
-      )
-        .bind(session.user_id)
-        .first<{ email?: string }>();
-      if (userRow && userRow.email) {
-        await clearAttempts(env.DB, userRow.email);
+      if (userProfile?.email) {
+        await clearAttempts(env.DB, userProfile.email);
       }
     } catch (err) {
       console.warn(

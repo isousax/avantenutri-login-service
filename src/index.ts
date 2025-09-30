@@ -12,6 +12,7 @@ import { listDietPlansHandler } from "./endpoints/diet/listDietPlans";
 import { createDietPlanHandler } from "./endpoints/diet/createDietPlan";
 import { reviseDietPlanHandler } from "./endpoints/diet/reviseDietPlan";
 import { getDietPlanHandler } from "./endpoints/diet/getDietPlan";
+import { getDietPlanFileHandler } from "./endpoints/diet/getDietPlanFile";
 import { updateDietPlanHandler } from "./endpoints/diet/updateDietPlan";
 import { createWaterLogHandler } from "./endpoints/water/createWaterLog";
 import { listWaterLogsHandler } from "./endpoints/water/listWaterLogs";
@@ -54,6 +55,7 @@ import { adminChangePlanHandler } from "./endpoints/admin/adminChangePlan";
 import { adminListConsultationsHandler } from "./endpoints/admin/adminListConsultations";
 import { adminUpsertAvailabilityRuleHandler } from "./endpoints/admin/adminUpsertAvailabilityRule";
 import { adminListAvailabilityHandler } from "./endpoints/admin/adminListAvailability";
+import { adminDeleteAvailabilityRuleHandler } from "./endpoints/admin/adminDeleteAvailabilityRule";
 import { adminBlockSlotHandler } from "./endpoints/admin/adminBlockSlot";
 import { availableConsultationSlotsHandler } from "./endpoints/consultation/availableSlots";
 import { listPlansHandler } from "./endpoints/billing/listPlans";
@@ -235,6 +237,7 @@ export default {
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
+      // Admin availability list
     }
     // Public available slots (authenticated not required for preview? could restrict later)
     if (
@@ -246,6 +249,7 @@ export default {
       res.headers.set(
         "Access-Control-Allow-Origin",
         getDynamicCorsOrigin(origin, env)
+      // Admin availability create
       );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
@@ -257,6 +261,56 @@ export default {
       /\/consultations\/[A-Za-z0-9-]+\/cancel$/.test(url.pathname)
     ) {
       const res = await cancelConsultationHandler(request, env);
+      // Admin availability update / patch
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+
+    // Admin availability list
+    if (request.method === "GET" && url.pathname === "/admin/consultations/availability") {
+      const res = await adminListAvailabilityHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+    // Admin availability create
+    if (request.method === "POST" && url.pathname === "/admin/consultations/availability") {
+      const res = await adminUpsertAvailabilityRuleHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+    // Admin availability patch
+    if (request.method === "PATCH" && /\/admin\/consultations\/availability\/[A-Za-z0-9-]+$/.test(url.pathname)) {
+      const res = await adminUpsertAvailabilityRuleHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+    // Admin availability delete (soft delete)
+    if (request.method === "DELETE" && /\/admin\/consultations\/availability\/[A-Za-z0-9-]+$/.test(url.pathname)) {
+      const res = await adminDeleteAvailabilityRuleHandler(request, env);
       const origin = request.headers.get("Origin");
       res.headers.set(
         "Access-Control-Allow-Origin",
@@ -664,6 +718,20 @@ export default {
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
+    // Download diet plan PDF /diet/plans/:id/version/:vid/file
+    if (
+      request.method === "GET" &&
+      /\/diet\/plans\/[A-Za-z0-9-]+\/version\/[A-Za-z0-9-]+\/file$/.test(url.pathname)
+    ) {
+      const res = await getDietPlanFileHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      return res;
+    }
 
     // Water logs list
     if (request.method === "GET" && url.pathname === "/water/logs") {
@@ -892,6 +960,21 @@ export default {
       url.pathname === "/admin/consultations/availability"
     ) {
       const res = await adminListAvailabilityHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+    if (
+      request.method === "GET" &&
+      url.pathname === "/admin/consultations/availability/log"
+    ) {
+      const { adminListAvailabilityLogHandler } = await import('./endpoints/admin/adminListAvailabilityLog');
+      const res = await adminListAvailabilityLogHandler(request, env);
       const origin = request.headers.get("Origin");
       res.headers.set(
         "Access-Control-Allow-Origin",

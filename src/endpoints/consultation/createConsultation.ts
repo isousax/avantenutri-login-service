@@ -8,7 +8,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 interface CreateConsultationBody {
   scheduledAt: string; // ISO datetime UTC
   durationMin?: number;
-  type: string; // acompanhamento | reavaliacao | outro
+  type: string; // avaliacao_completa | reavaliacao | outro
   notes?: string;
   urgency?: string; // baixa | normal | alta
 }
@@ -24,6 +24,25 @@ export async function createConsultationHandler(request: Request, env: Env): Pro
   const userId = String(payload.sub);
   const ent = await computeEffectiveEntitlements(env, userId);
   if (!ent.capabilities.includes('CONSULTA_AGENDAR')) return json({ error: 'Forbidden (missing CONSULTA_AGENDAR)' }, 403);
+
+  // Check if questionnaire is complete before allowing consultation booking
+  try {
+    const questRow = await env.DB.prepare(`SELECT category, answers_json, submitted_at FROM questionnaire_responses WHERE user_id = ?`).bind(userId).first<any>();
+    if (!questRow || !questRow.submitted_at) {
+      return json({ error: 'questionnaire_required', message: 'Questionário deve ser preenchido antes de agendar consulta' }, 400);
+    }
+    // Additional validation for questionnaire completeness
+    let answers: Record<string, any> = {};
+    try { answers = JSON.parse(questRow.answers_json || '{}'); } catch { answers = {}; }
+    const requiredCommon = ['nome', 'email', 'telefone'];
+    const hasCommon = requiredCommon.every(field => answers[field]?.trim());
+    if (!hasCommon || !questRow.category) {
+      return json({ error: 'questionnaire_incomplete', message: 'Questionário incompleto. Complete todas as informações obrigatórias.' }, 400);
+    }
+  } catch (e: any) {
+    console.error('[createConsultation] Error checking questionnaire:', e);
+    return json({ error: 'Internal Error' }, 500);
+  }
 
   // Enforce monthly included consultations limit if limit > 0 (count scheduled + completed in current month)
   try {
@@ -52,7 +71,7 @@ export async function createConsultationHandler(request: Request, env: Env): Pro
   let body: CreateConsultationBody; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   if (!body?.scheduledAt || !body?.type) return json({ error: 'missing_fields' }, 400);
   const type = String(body.type).toLowerCase();
-  const allowedTypes = ['acompanhamento','reavaliacao','outro'];
+  const allowedTypes = ['avaliacao_completa','reavaliacao','outro'];
   if (!allowedTypes.includes(type)) return json({ error: 'invalid_type' }, 400);
   const scheduledDate = new Date(body.scheduledAt);
   if (isNaN(scheduledDate.getTime())) return json({ error: 'invalid_datetime' }, 400);

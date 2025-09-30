@@ -66,20 +66,57 @@ export async function mercadoPagoWebhookHandler(request: Request, env: Env): Pro
   // In sandbox you may not have signature; we still process, but mark verified flag
   let payload: any; try { payload = JSON.parse(rawBody); } catch { payload = { raw: rawBody }; }
   const eventType = payload?.type || payload?.action || 'unknown';
+  
+  // Handle different event types
   const paymentId = payload?.data?.id || payload?.resource?.id || payload?.id;
+  
   try {
-    if (paymentId) {
-      // Fetch payment details if needed (not implemented - could call /v1/payments/:id)
-      // Update status based on event if present
-      const status = (payload?.data?.status || payload?.status || '').toLowerCase();
+    if (paymentId && (eventType === 'payment' || eventType.includes('payment'))) {
+      // For Checkout Pro, we might need to fetch the payment details from MP API
+      let paymentData = payload?.data || payload;
+      
+      // If we only have the payment ID, fetch full details from MP
+      if (!paymentData?.status && env.MP_ACCESS_TOKEN) {
+        try {
+          const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+            headers: {
+              'Authorization': `Bearer ${env.MP_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (mpResponse.ok) {
+            paymentData = await mpResponse.json();
+          }
+        } catch (e) {
+          console.warn('[Webhook] Failed to fetch payment details from MP:', e);
+        }
+      }
+      
+      const status = (paymentData?.status || '').toLowerCase();
+      const statusDetail = paymentData?.status_detail || null;
+      const paymentMethod = paymentData?.payment_method_id || null;
+      const installments = paymentData?.installments || 1;
+      const externalReference = paymentData?.external_reference || null;
+      
       if (status) {
-        await env.DB.prepare('UPDATE payments SET status = ?, external_id = COALESCE(external_id, ?), raw_payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE external_id = ?')
-          .bind(status, String(paymentId), JSON.stringify(payload).slice(0,8000), String(paymentId))
-          .run();
+        // Update by external_id or external_reference
+        let updateQuery = 'UPDATE payments SET status = ?, status_detail = ?, payment_method = ?, installments = ?, external_id = COALESCE(external_id, ?), raw_payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE external_id = ?';
+        let updateParams = [status, statusDetail, paymentMethod, installments, String(paymentId), JSON.stringify(paymentData).slice(0,8000), String(paymentId)];
+        
+        // If external_reference matches our payment_id format, also try updating by that
+        if (externalReference) {
+          updateQuery = 'UPDATE payments SET status = ?, status_detail = ?, payment_method = ?, installments = ?, external_id = COALESCE(external_id, ?), raw_payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE external_id = ? OR id = ?';
+          updateParams = [status, statusDetail, paymentMethod, installments, String(paymentId), JSON.stringify(paymentData).slice(0,8000), String(paymentId), externalReference];
+        }
+        
+        await env.DB.prepare(updateQuery).bind(...updateParams).run();
+        
         if (status === 'approved') {
           // Apply plan if not processed yet
-          const payRow = await env.DB.prepare('SELECT id, user_id, plan_id, processed_at FROM payments WHERE external_id = ?')
-            .bind(String(paymentId)).first<{ id?: string; user_id?: string; plan_id?: string; processed_at?: string }>();
+          const payRow = await env.DB.prepare('SELECT id, user_id, plan_id, processed_at FROM payments WHERE (external_id = ? OR id = ?) AND status = ?')
+            .bind(String(paymentId), externalReference || '', 'approved')
+            .first<{ id?: string; user_id?: string; plan_id?: string; processed_at?: string }>();
+            
           if (payRow?.id && !payRow.processed_at) {
             const user = await env.DB.prepare('SELECT plan_id FROM users WHERE id = ?').bind(payRow.user_id).first<{ plan_id?: string }>();
             const oldPlan = user?.plan_id || null;
@@ -97,6 +134,7 @@ export async function mercadoPagoWebhookHandler(request: Request, env: Env): Pro
       }
     }
   } catch (e:any) {
+    console.error('[MercadoPagoWebhook] Error:', e);
     return json({ ok: true, processed: false, error: 'internal_error' }, 200);
   }
   return json({ ok: true, verified, event: eventType });

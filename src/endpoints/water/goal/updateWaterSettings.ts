@@ -1,6 +1,5 @@
 import type { Env } from "../../../types/Env";
 import { verifyAccessToken } from "../../../service/tokenVerify";
-import { computeEffectiveEntitlements } from "../../../service/permissions";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -14,9 +13,6 @@ export async function updateWaterSettingsHandler(request: Request, env: Env): Pr
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('AGUA_LOG')) return json({ error: 'Forbidden (missing AGUA_LOG)' }, 403);
 
   let body: any; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const cup_ml = Number(body?.cup_ml);

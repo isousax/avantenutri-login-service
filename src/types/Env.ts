@@ -30,6 +30,10 @@ export interface Env {
   MP_PUBLIC_KEY?: string; // usada no frontend (exposta via endpoint seguro)
   MP_ACCESS_TOKEN?: string; // server-side secret for Payments API
   MP_WEBHOOK_SECRET?: string; // shared secret to verify webhook signatures
+  // URLs for checkout redirects
+  WEBHOOK_URL?: string;
+  FRONTEND_URL?: string; // base URL for frontend (e.g., https://avantenutri.com)
+  BACKEND_URL?: string; // base URL for backend API (e.g., https://api.avantenutri.com)
   // R2 bucket para armazenar PDFs de dietas
   DIET_FILES?: R2Bucket; // binding opcional - se ausente, PDFs permanecem inline (evitar em produção)
 }

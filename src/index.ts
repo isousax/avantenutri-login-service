@@ -46,7 +46,13 @@ import { cancelConsultationHandler } from "./endpoints/consultation/cancelConsul
 import {
   getQuestionnaireHandler,
   upsertQuestionnaireHandler,
+  getQuestionnaireStatusHandler,
 } from "./endpoints/questionnaire/upsertQuestionnaire";
+import { adminGetUserQuestionnaireHandler } from "./endpoints/admin/adminGetUserQuestionnaire";
+import { adminQuestionnaireAnalyticsHandler } from "./endpoints/admin/adminQuestionnaireAnalytics";
+import { adminSendNotificationHandler } from "./endpoints/admin/adminSendNotification";
+import { getUserNotificationsHandler } from "./endpoints/notifications/getUserNotifications";
+import { markNotificationReadHandler } from "./endpoints/notifications/markNotificationRead";
 import { adminAuditHandler } from "./endpoints/admin/adminAudit";
 import { adminChangeRoleHandler } from "./endpoints/admin/adminChangeRole";
 import { adminListUsersHandler } from "./endpoints/admin/adminListUsers";
@@ -60,11 +66,10 @@ import { adminBlockSlotHandler } from "./endpoints/admin/adminBlockSlot";
 import { availableConsultationSlotsHandler } from "./endpoints/consultation/availableSlots";
 import { listPlansHandler } from "./endpoints/billing/listPlans";
 import { billingIntentHandler } from "./endpoints/billing/billingIntent";
-import { billingPayHandler } from "./endpoints/billing/billingPay";
+import { billingStatusHandler } from "./endpoints/billing/billingStatus";
 import { mercadoPagoWebhookHandler } from "./endpoints/billing/mercadoPagoWebhook";
 import { listUserPaymentsHandler } from "./endpoints/billing/listUserPayments";
-import { listPlanChangesHandler } from "./endpoints/billing/listPlanChanges";
-import { downgradePlanHandler } from "./endpoints/billing/downgradePlan";
+import { listAllPaymentsHandler } from "./endpoints/admin/listAllPayments";
 import {
   listOverridesHandler,
   createOverrideHandler,
@@ -127,9 +132,10 @@ export default {
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
-    // Billing pay (create payment in provider)
-    if (request.method === "POST" && url.pathname === "/billing/pay") {
-      const res = await billingPayHandler(request, env);
+
+    // Billing status (get payment status)
+    if (request.method === "GET" && url.pathname === "/billing/status") {
+      const res = await billingStatusHandler(request, env);
       const origin = request.headers.get("Origin");
       res.headers.set(
         "Access-Control-Allow-Origin",
@@ -151,30 +157,7 @@ export default {
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
-    // Plan change history
-    if (request.method === "GET" && url.pathname === "/billing/plan-changes") {
-      const res = await listPlanChangesHandler(request, env);
-      const origin = request.headers.get("Origin");
-      res.headers.set(
-        "Access-Control-Allow-Origin",
-        getDynamicCorsOrigin(origin, env)
-      );
-      res.headers.set("X-Request-Id", requestId);
-      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
-      return res;
-    }
-    // Downgrade (schedule immediate to free)
-    if (request.method === "POST" && url.pathname === "/billing/downgrade") {
-      const res = await downgradePlanHandler(request, env);
-      const origin = request.headers.get("Origin");
-      res.headers.set(
-        "Access-Control-Allow-Origin",
-        getDynamicCorsOrigin(origin, env)
-      );
-      res.headers.set("X-Request-Id", requestId);
-      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
-      return res;
-    }
+
     // Webhook Mercado Pago
     if (
       request.method === "POST" &&
@@ -205,6 +188,47 @@ export default {
     // Questionnaire get
     if (request.method === "GET" && url.pathname === "/questionnaire") {
       const res = await getQuestionnaireHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+    // Questionnaire status check
+    if (request.method === "GET" && url.pathname === "/questionnaire/status") {
+      const res = await getQuestionnaireStatusHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+
+    // Get user notifications - GET /notifications
+    if (request.method === "GET" && url.pathname === "/notifications") {
+      const res = await getUserNotificationsHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+
+    // Mark notification as read - POST /notifications/{id}/read
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/notifications\/[^\/]+\/read$/)
+    ) {
+      const res = await markNotificationReadHandler(request, env);
       const origin = request.headers.get("Origin");
       res.headers.set(
         "Access-Control-Allow-Origin",
@@ -907,6 +931,60 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/admin/users") {
       const res = await adminListUsersHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+
+    // Admin get user questionnaire - GET /admin/users/{userId}/questionnaire
+    if (
+      request.method === "GET" &&
+      url.pathname.match(/^\/admin\/users\/[^\/]+\/questionnaire$/)
+    ) {
+      const res = await adminGetUserQuestionnaireHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+
+    // Admin questionnaire analytics - GET /admin/questionnaire/analytics
+    if (request.method === "GET" && url.pathname === "/admin/questionnaire/analytics") {
+      const res = await adminQuestionnaireAnalyticsHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+
+    // Admin send notification - POST /admin/notifications
+    if (request.method === "POST" && url.pathname === "/admin/notifications") {
+      const res = await adminSendNotificationHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+    
+    if (request.method === "GET" && url.pathname === "/admin/payments") {
+      const res = await listAllPaymentsHandler(request, env);
       const origin = request.headers.get("Origin");
       res.headers.set(
         "Access-Control-Allow-Origin",

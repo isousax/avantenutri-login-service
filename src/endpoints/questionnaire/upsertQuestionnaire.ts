@@ -12,6 +12,34 @@ interface QuestionnairePayload {
   submit?: boolean;
 }
 
+// Helper function to check if questionnaire is complete
+function isQuestionnaireComplete(data: any): boolean {
+  if (!data || !data.submitted_at) return false;
+  
+  const answers = data.answers || {};
+  const category = data.category;
+  
+  // Required fields for all categories
+  const requiredCommon = ['nome', 'email', 'telefone'];
+  const hasCommon = requiredCommon.every(field => answers[field]?.trim());
+  
+  if (!hasCommon || !category) return false;
+  
+  // Category-specific required fields
+  switch (category) {
+    case 'adulto':
+      return !!(answers['Peso (kg)'] && answers['Altura (cm)'] && answers['Idade']);
+    case 'esportiva':
+      return !!(answers['Peso (kg)'] && answers['Altura (cm)'] && answers['Idade']);
+    case 'gestante':
+      return !!(answers['Peso antes da gravidez (kg)'] && answers['Peso atual (kg)']);
+    case 'infantil':
+      return !!(answers['Peso atual (kg)'] && answers['Altura (cm)'] && answers['Idade']);
+    default:
+      return true; // For other categories, just check if submitted
+  }
+}
+
 // POST /questionnaire { step, category, answers, submit? }
 export async function upsertQuestionnaireHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'POST') return json({ error: 'Method Not Allowed' }, 405);
@@ -52,9 +80,33 @@ export async function getQuestionnaireHandler(request: Request, env: Env): Promi
   const userId = String(payload.sub);
   try {
     const row = await env.DB.prepare(`SELECT step_count, category, answers_json, submitted_at, updated_at FROM questionnaire_responses WHERE user_id = ?`).bind(userId).first<any>();
-    if (!row) return json({ ok: true, data: null });
+    if (!row) return json({ ok: true, data: null, is_complete: false });
     let answers: Record<string, any> = {}; try { answers = JSON.parse(row.answers_json || '{}'); } catch { answers = {}; }
-    return json({ ok: true, data: { step: row.step_count, category: row.category, answers, submitted_at: row.submitted_at, updated_at: row.updated_at } });
+    const data = { step: row.step_count, category: row.category, answers, submitted_at: row.submitted_at, updated_at: row.updated_at };
+    const is_complete = isQuestionnaireComplete(data);
+    return json({ ok: true, data, is_complete });
+  } catch (e:any) {
+    return json({ error: 'Internal Error' }, 500);
+  }
+}
+
+// GET /questionnaire/status - Quick status check for questionnaire completion
+export async function getQuestionnaireStatusHandler(request: Request, env: Env): Promise<Response> {
+  if (request.method !== 'GET') return json({ error: 'Method Not Allowed' }, 405);
+  const auth = request.headers.get('authorization');
+  if (!auth?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
+  const token = auth.slice(7);
+  const { valid, payload } = await verifyAccessToken(env, token, {});
+  if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
+  const userId = String(payload.sub);
+  try {
+    const row = await env.DB.prepare(`SELECT category, answers_json, submitted_at FROM questionnaire_responses WHERE user_id = ?`).bind(userId).first<any>();
+    if (!row) return json({ ok: true, is_complete: false, has_data: false });
+    let answers: Record<string, any> = {}; try { answers = JSON.parse(row.answers_json || '{}'); } catch { answers = {}; }
+    const data = { category: row.category, answers, submitted_at: row.submitted_at };
+    const is_complete = isQuestionnaireComplete(data);
+    const has_data = !!(row.submitted_at || Object.keys(answers).length > 0);
+    return json({ ok: true, is_complete, has_data });
   } catch (e:any) {
     return json({ error: 'Internal Error' }, 500);
   }

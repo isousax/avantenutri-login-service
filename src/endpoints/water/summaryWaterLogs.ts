@@ -1,6 +1,5 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
-import { computeEffectiveEntitlements } from "../../service/permissions";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -14,9 +13,6 @@ export async function summaryWaterLogsHandler(request: Request, env: Env): Promi
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('AGUA_LOG')) return json({ error: 'Forbidden (missing AGUA_LOG)' }, 403);
 
   const url = new URL(request.url);
   const daysParam = parseInt(url.searchParams.get('days') || '7', 10);
@@ -52,7 +48,7 @@ export async function summaryWaterLogsHandler(request: Request, env: Env): Promi
     const best = daysArr.reduce<{ date: string; total_ml: number } | null>((best, d) => !best || d.total_ml > best.total_ml ? d : best, null);
     const today = endStr;
     const todayTotal = map[today] || 0;
-    const waterLimit = ent.limits?.['WATER_ML_DIA'] ?? null;
+    
     // Fetch user water goal (daily cups) if exists to enrich response (non-fatal if fails)
   let daily_cups: number | null = null;
   let cup_ml: number | null = null;
@@ -66,7 +62,7 @@ export async function summaryWaterLogsHandler(request: Request, env: Env): Promi
         .first<{ cup_ml?: number }>();
       if (settingsRow?.cup_ml && settingsRow.cup_ml > 0) cup_ml = settingsRow.cup_ml;
     } catch { /* ignore */ }
-    return json({ ok: true, range: { from: startStr, to: endStr }, days: daysArr, stats: { avg, best, today: { date: today, total_ml: todayTotal }, limit: waterLimit, daily_cups, cup_ml } });
+    return json({ ok: true, range: { from: startStr, to: endStr }, days: daysArr, stats: { avg, best, today: { date: today, total_ml: todayTotal }, limit: null, daily_cups, cup_ml } });
   } catch (err:any) {
     console.error('[summaryWaterLogs] error', err?.message || err);
     return json({ error: 'Internal Server Error' }, 500);

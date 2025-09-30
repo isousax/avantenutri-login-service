@@ -1,6 +1,5 @@
 import type { Env } from "../../../types/Env";
 import { verifyAccessToken } from "../../../service/tokenVerify";
-import { computeEffectiveEntitlements } from "../../../service/permissions";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -15,9 +14,6 @@ export async function getWaterGoalHandler(request: Request, env: Env): Promise<R
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
 
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('AGUA_LOG')) return json({ error: 'Forbidden (missing AGUA_LOG)' }, 403);
-
   try {
     const row = await env.DB.prepare('SELECT daily_cups FROM user_water_goals WHERE user_id = ?')
       .bind(userId)
@@ -29,14 +25,11 @@ export async function getWaterGoalHandler(request: Request, env: Env): Promise<R
     let daily_cups: number;
   if (row?.daily_cups && row.daily_cups > 0) { daily_cups = row.daily_cups; source = 'user'; }
     else {
-      // fallback: derive from plan limit WATER_ML_DIA if exists
-      const mlLimit = ent.limits?.['WATER_ML_DIA'];
-      const cupMl = settings?.cup_ml && settings.cup_ml > 0 ? settings.cup_ml : 250;
-      if (typeof mlLimit === 'number' && mlLimit > 0) { daily_cups = Math.max(1, Math.round(mlLimit / cupMl)); source = 'plan'; }
-      else { daily_cups = 8; source = 'default'; }
+      // fallback: default to 8 cups since we no longer have plan limits
+      daily_cups = 8; 
+      source = 'default';
     }
-    const mlLimit = ent.limits?.['WATER_ML_DIA'] ?? null;
-    return json({ ok: true, daily_cups, cup_ml: settings?.cup_ml || 250, source, limit_ml: mlLimit });
+    return json({ ok: true, daily_cups, cup_ml: settings?.cup_ml || 250, source, limit_ml: null });
   } catch (e:any) {
     console.error('[getWaterGoal] error', e?.message || e);
     return json({ error: 'Internal Server Error' }, 500);

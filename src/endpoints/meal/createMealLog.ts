@@ -1,6 +1,5 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
-import { computeEffectiveEntitlements } from "../../service/permissions";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -14,8 +13,6 @@ export async function createMealLogHandler(request: Request, env: Env): Promise<
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('REFEICAO_LOG')) return json({ error: 'Forbidden (missing REFEICAO_LOG)' }, 403);
 
   let body: any; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const meal_type = typeof body?.meal_type === 'string' ? body.meal_type.toLowerCase() : '';
@@ -61,8 +58,6 @@ export async function listMealLogsHandler(request: Request, env: Env): Promise<R
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('REFEICAO_LOG')) return json({ error: 'Forbidden (missing REFEICAO_LOG)' }, 403);
 
   const url = new URL(request.url);
   const from = url.searchParams.get('from');
@@ -88,8 +83,6 @@ export async function summaryMealLogsHandler(request: Request, env: Env): Promis
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('REFEICAO_LOG')) return json({ error: 'Forbidden (missing REFEICAO_LOG)' }, 403);
   const url = new URL(request.url);
   const daysRaw = Number(url.searchParams.get('days') || 7);
   const days = !Number.isFinite(daysRaw) || daysRaw <= 0 ? 7 : Math.min(90, Math.round(daysRaw));
@@ -147,8 +140,6 @@ export async function patchMealLogHandler(request: Request, env: Env): Promise<R
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('REFEICAO_LOG')) return json({ error: 'Forbidden (missing REFEICAO_LOG)' }, 403);
   const url = new URL(request.url);
   const id = url.pathname.split('/').pop()!;
   let body: any; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
@@ -177,8 +168,6 @@ export async function deleteMealLogHandler(request: Request, env: Env): Promise<
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('REFEICAO_LOG')) return json({ error: 'Forbidden (missing REFEICAO_LOG)' }, 403);
   const url = new URL(request.url); const id = url.pathname.split('/').pop()!;
   try {
     const res = await env.DB.prepare(`DELETE FROM meal_logs WHERE id = ? AND user_id = ?`).bind(id, userId).run();
@@ -196,8 +185,6 @@ export async function updateMealGoalsHandler(request: Request, env: Env): Promis
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('REFEICAO_LOG')) return json({ error: 'Forbidden (missing REFEICAO_LOG)' }, 403);
   let body: any; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const normInt = (v:any,max:number)=> { if(v==null) return null; const n=Number(v); if(!Number.isFinite(n)|| n<=0 || n>max) return undefined; return Math.round(n); };
   const normFloat = (v:any,max:number)=> { if(v==null) return null; const n=Number(v); if(!Number.isFinite(n)|| n<=0 || n>max) return undefined; return Math.round(n*100)/100; };

@@ -573,10 +573,14 @@ CREATE TABLE IF NOT EXISTS payments (
   plan_id TEXT NOT NULL,
   provider TEXT NOT NULL, -- e.g. MERCADOPAGO
   external_id TEXT, -- provider payment id
+  preference_id TEXT, -- for checkout pro - MP preference id
+  init_point TEXT, -- checkout pro redirect URL
   amount_cents INTEGER NOT NULL,
   currency TEXT NOT NULL DEFAULT 'BRL',
   status TEXT NOT NULL DEFAULT 'initialized', -- initialized | pending | approved | rejected | refunded | cancelled
   status_detail TEXT,
+  payment_method TEXT, -- card, pix, boleto, etc
+  installments INTEGER DEFAULT 1,
   idempotency_key TEXT,
   raw_payload_json TEXT,
   processed_at TIMESTAMP,
@@ -610,6 +614,37 @@ CREATE INDEX IF NOT EXISTS idx_plan_change_payment ON plan_change_log(payment_id
 -- ENTITLEMENT AUDIT (versioning + logs)
 -- ===================================================================
 -- (already created above: user_entitlements_version, user_entitlement_overrides, override log)
+
+-- ===================================================================
+-- NOTIFICATIONS SYSTEM
+-- ===================================================================
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('info', 'warning', 'success', 'error')),
+  target_type TEXT NOT NULL CHECK (target_type IN ('all', 'specific', 'group')),
+  target_group TEXT CHECK (target_group IN ('active', 'incomplete_questionnaire', 'recent_signups')),
+  target_user_count INTEGER NOT NULL DEFAULT 0,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_notifications (
+  id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  notification_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  read_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_expires ON notifications(expires_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_target ON notifications(target_type, target_group);
+CREATE INDEX IF NOT EXISTS idx_user_notifications_user ON user_notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_notifications_read ON user_notifications(user_id, read_at);
+CREATE INDEX IF NOT EXISTS idx_user_notifications_notification ON user_notifications(notification_id);
 
 -- ===================================================================
 -- MISC NOTES

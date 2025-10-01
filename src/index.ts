@@ -53,6 +53,7 @@ import { adminQuestionnaireAnalyticsHandler } from "./endpoints/admin/adminQuest
 import { adminSendNotificationHandler } from "./endpoints/admin/adminSendNotification";
 import { getUserNotificationsHandler } from "./endpoints/notifications/getUserNotifications";
 import { markNotificationReadHandler } from "./endpoints/notifications/markNotificationRead";
+import { markAllNotificationsReadHandler } from "./endpoints/notifications/markAllNotificationsRead";
 import { adminAuditHandler } from "./endpoints/admin/adminAudit";
 import { adminChangeRoleHandler } from "./endpoints/admin/adminChangeRole";
 import { adminListUsersHandler } from "./endpoints/admin/adminListUsers";
@@ -213,6 +214,19 @@ export default {
     // Get user notifications - GET /notifications
     if (request.method === "GET" && url.pathname === "/notifications") {
       const res = await getUserNotificationsHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+
+    // Mark ALL notifications as read - POST /notifications/read-all
+    if (request.method === "POST" && url.pathname === "/notifications/read-all") {
+      const res = await markAllNotificationsReadHandler(request, env);
       const origin = request.headers.get("Origin");
       res.headers.set(
         "Access-Control-Allow-Origin",

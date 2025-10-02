@@ -12,10 +12,10 @@ export async function listUserPaymentsHandler(request: Request, env: Env): Promi
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   try {
-    const rows = await env.DB.prepare(`SELECT id, user_id, plan_id, amount_cents, currency, status, status_detail, 
+    const rows = await env.DB.prepare(`SELECT id, user_id, purpose, consultation_type, amount_cents, currency, status, status_detail, 
       payment_method, installments, external_id, preference_id, processed_at, created_at, updated_at
       FROM payments WHERE user_id = ? ORDER BY created_at DESC LIMIT 100`).bind(String(payload.sub)).all();
-    return json({ ok: true, payments: rows.results });
+  return json({ ok: true, payments: rows.results || [] });
   } catch (e:any) {
     return json({ error: 'Internal Error' }, 500);
   }

@@ -1,6 +1,5 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
-import { computeEffectiveEntitlements } from "../../service/permissions";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -14,8 +13,7 @@ export async function listConsultationsHandler(request: Request, env: Env): Prom
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('CONSULTA_AGENDAR')) return json({ error: 'Forbidden (missing capability)' }, 403);
+  // Modelo sem planos/capabilities: todos usuários autenticados podem listar.
 
   const url = new URL(request.url);
   const from = url.searchParams.get('from');

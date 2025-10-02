@@ -58,19 +58,19 @@ import { adminAuditHandler } from "./endpoints/admin/adminAudit";
 import { adminChangeRoleHandler } from "./endpoints/admin/adminChangeRole";
 import { adminListUsersHandler } from "./endpoints/admin/adminListUsers";
 import { adminForceLogoutHandler } from "./endpoints/admin/adminForceLogout";
-import { adminChangePlanHandler } from "./endpoints/admin/adminChangePlan";
 import { adminListConsultationsHandler } from "./endpoints/admin/adminListConsultations";
 import { adminUpsertAvailabilityRuleHandler } from "./endpoints/admin/adminUpsertAvailabilityRule";
 import { adminListAvailabilityHandler } from "./endpoints/admin/adminListAvailability";
 import { adminDeleteAvailabilityRuleHandler } from "./endpoints/admin/adminDeleteAvailabilityRule";
 import { adminBlockSlotHandler } from "./endpoints/admin/adminBlockSlot";
 import { availableConsultationSlotsHandler } from "./endpoints/consultation/availableSlots";
-import { listPlansHandler } from "./endpoints/billing/listPlans";
 import { billingIntentHandler } from "./endpoints/billing/billingIntent";
 import { billingStatusHandler } from "./endpoints/billing/billingStatus";
 import { mercadoPagoWebhookHandler } from "./endpoints/billing/mercadoPagoWebhook";
 import { listUserPaymentsHandler } from "./endpoints/billing/listUserPayments";
 import { listAllPaymentsHandler } from "./endpoints/admin/listAllPayments";
+import { adminListConsultationPricingHandler, adminUpsertConsultationPricingHandler, adminPatchConsultationPricingHandler } from './endpoints/admin/consultationPricing';
+import { publicConsultationPricingHandler, publicConsultationPricingStatusHandler } from './endpoints/consultation/publicPricing';
 import {
   listOverridesHandler,
   createOverrideHandler,
@@ -109,18 +109,6 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: getCorsHeaders(env, requestId) });
     }
-    // Public plans catalog
-    if (request.method === "GET" && url.pathname === "/plans") {
-      const res = await listPlansHandler(request, env);
-      const origin = request.headers.get("Origin");
-      res.headers.set(
-        "Access-Control-Allow-Origin",
-        getDynamicCorsOrigin(origin, env)
-      );
-      res.headers.set("X-Request-Id", requestId);
-      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
-      return res;
-    }
     // Billing intent (initiate payment)
     if (request.method === "POST" && url.pathname === "/billing/intent") {
       const res = await billingIntentHandler(request, env);
@@ -142,6 +130,26 @@ export default {
         "Access-Control-Allow-Origin",
         getDynamicCorsOrigin(origin, env)
       );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+    // Public consultation pricing (no auth)
+    if (request.method === "GET" && url.pathname === "/consultations/pricing") {
+      const res = await publicConsultationPricingHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+    if (request.method === "GET" && url.pathname === "/consultations/pricing/status") {
+      const res = await publicConsultationPricingStatusHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set("Access-Control-Allow-Origin", getDynamicCorsOrigin(origin, env));
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
@@ -927,21 +935,6 @@ export default {
       return res;
     }
 
-    if (
-      request.method === "PATCH" &&
-      url.pathname.startsWith("/admin/users/") &&
-      url.pathname.endsWith("/plan")
-    ) {
-      const res = await adminChangePlanHandler(request, env);
-      const origin = request.headers.get("Origin");
-      res.headers.set(
-        "Access-Control-Allow-Origin",
-        getDynamicCorsOrigin(origin, env)
-      );
-      res.headers.set("X-Request-Id", requestId);
-      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
-      return res;
-    }
 
     if (request.method === "GET" && url.pathname === "/admin/users") {
       const res = await adminListUsersHandler(request, env);
@@ -1006,6 +999,31 @@ export default {
       );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+    // Admin consultation pricing
+    if (request.method === 'GET' && url.pathname === '/admin/consultations/pricing') {
+      const res = await adminListConsultationPricingHandler(request, env);
+      const origin = request.headers.get('Origin');
+      res.headers.set('Access-Control-Allow-Origin', getDynamicCorsOrigin(origin, env));
+      res.headers.set('X-Request-Id', requestId);
+      res.headers.set('Content-Security-Policy', "frame-ancestors 'none';");
+      return res;
+    }
+    if (request.method === 'PUT' && url.pathname === '/admin/consultations/pricing') {
+      const res = await adminUpsertConsultationPricingHandler(request, env);
+      const origin = request.headers.get('Origin');
+      res.headers.set('Access-Control-Allow-Origin', getDynamicCorsOrigin(origin, env));
+      res.headers.set('X-Request-Id', requestId);
+      res.headers.set('Content-Security-Policy', "frame-ancestors 'none';");
+      return res;
+    }
+    if (request.method === 'PATCH' && url.pathname.startsWith('/admin/consultations/pricing/')) {
+      const res = await adminPatchConsultationPricingHandler(request, env);
+      const origin = request.headers.get('Origin');
+      res.headers.set('Access-Control-Allow-Origin', getDynamicCorsOrigin(origin, env));
+      res.headers.set('X-Request-Id', requestId);
+      res.headers.set('Content-Security-Policy', "frame-ancestors 'none';");
       return res;
     }
     if (request.method === "GET" && url.pathname === "/admin/consultations") {

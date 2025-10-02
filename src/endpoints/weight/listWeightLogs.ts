@@ -1,6 +1,5 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
-import { computeEffectiveEntitlements } from "../../service/permissions";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -15,8 +14,7 @@ export async function listWeightLogsHandler(request: Request, env: Env): Promise
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
 
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('PESO_LOG')) return json({ error: 'Forbidden (missing PESO_LOG)' }, 403);
+  // Sem verificação de capability
 
   const url = new URL(request.url);
   const isValidDate = (s:string)=> /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));

@@ -112,20 +112,21 @@ export async function mercadoPagoWebhookHandler(request: Request, env: Env): Pro
         await env.DB.prepare(updateQuery).bind(...updateParams).run();
         
         if (status === 'approved') {
-          // Apply plan if not processed yet
-          const payRow = await env.DB.prepare('SELECT id, user_id, plan_id, processed_at FROM payments WHERE (external_id = ? OR id = ?) AND status = ?')
+          // Gerar crédito de consulta se pagamento for de consulta e ainda não processado
+          const payRow = await env.DB.prepare('SELECT id, user_id, purpose, consultation_type, processed_at FROM payments WHERE (external_id = ? OR id = ?) AND status = ?')
             .bind(String(paymentId), externalReference || '', 'approved')
-            .first<{ id?: string; user_id?: string; plan_id?: string; processed_at?: string }>();
-            
+            .first<{ id?: string; user_id?: string; purpose?: string; consultation_type?: string; processed_at?: string }>();
           if (payRow?.id && !payRow.processed_at) {
-            const user = await env.DB.prepare('SELECT plan_id FROM users WHERE id = ?').bind(payRow.user_id).first<{ plan_id?: string }>();
-            const oldPlan = user?.plan_id || null;
-            await env.DB.prepare('UPDATE users SET plan_id = ?, session_version = session_version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-              .bind(payRow.plan_id, payRow.user_id)
-              .run();
-            await env.DB.prepare('INSERT INTO plan_change_log (user_id, old_plan_id, new_plan_id, reason, payment_id) VALUES (?,?,?,?,?)')
-              .bind(payRow.user_id, oldPlan, payRow.plan_id, 'payment', payRow.id)
-              .run();
+            if (payRow.purpose === 'consultation' && payRow.consultation_type) {
+              const existingCredit = await env.DB.prepare('SELECT id FROM consultation_credits WHERE payment_id = ? LIMIT 1')
+                .bind(payRow.id)
+                .first<any>();
+              if (!existingCredit) {
+                await env.DB.prepare('INSERT INTO consultation_credits (id, user_id, type, status, payment_id) VALUES (?, ?, ?, "available", ?)')
+                  .bind(crypto.randomUUID(), payRow.user_id, payRow.consultation_type, payRow.id)
+                  .run();
+              }
+            }
             await env.DB.prepare('UPDATE payments SET processed_at = CURRENT_TIMESTAMP WHERE id = ?')
               .bind(payRow.id)
               .run();

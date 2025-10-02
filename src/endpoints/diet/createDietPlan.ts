@@ -1,6 +1,5 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
-import { computeEffectiveEntitlements } from "../../service/permissions";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 function json(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS }); }
@@ -21,12 +20,10 @@ export async function createDietPlanHandler(request: Request, env: Env): Promise
   if (end_date && isNaN(Date.parse(end_date))) return json({ error: 'invalid end_date' }, 400);
 
   // Capability + role check. Business rule: apenas ADMIN pode criar dietas (mesmo que o plano conceda capability ao paciente).
-  const ent = await computeEffectiveEntitlements(env, userId);
   const roleRow = await env.DB.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first<{ role?: string }>();
   if (roleRow?.role !== 'admin') {
     return json({ error: 'Forbidden (admin only)' }, 403);
   }
-  if (!ent.capabilities.includes('DIETA_EDIT')) return json({ error: 'Forbidden (missing capability DIETA_EDIT)' }, 403);
 
   // Start first version
   const planId = crypto.randomUUID();

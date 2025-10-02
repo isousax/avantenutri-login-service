@@ -26,6 +26,84 @@ This is an example project made to be used as a quick start into building OpenAP
 
 ---
 
+## ❌ Sistema de Planos / Entitlements Descontinuado
+
+O backend originalmente possuía tabelas e lógica para:
+- Catálogo de planos (`plans`, `plan_capabilities`, `plan_limits`)
+- Controle de uso e overrides (`user_usage_counters`, `user_entitlement_overrides`, `user_entitlements_version`, `user_entitlement_override_log`)
+- Log de mudanças de plano (`plan_change_log`) e coluna `plan_id` em `users` / `payments`.
+
+Todo esse modelo foi removido. Agora:
+- Não há gating por capabilities ou limits.
+- Coluna `plan_id` deixou de ser usada (removida do schema). Pagamentos permanecem apenas como registro financeiro genérico.
+- Endpoint de entitlements passou a retornar estrutura estática mínima.
+- Código relacionado a mudança de plano e cálculo de entitlements foi eliminado.
+
+Se houver bases existentes, uma migração manual deve:
+1. Dropar tabelas: `plan_change_log`, `payments` (se desejar recriar sem plan_id), `plans`, `plan_capabilities`, `plan_limits`, `user_usage_counters`, `user_entitlement_overrides`, `user_entitlements_version`, `user_entitlement_override_log`.
+2. Remover colunas `plan_id` de `users` e `payments` (ou recriar tabela `payments` conforme novo schema sem essa coluna).
+3. Atualizar quaisquer scripts ETL / BI que referenciem planos.
+
+Exemplo (SQLite) para bases antigas (execute com cautela / backup):
+```sql
+BEGIN TRANSACTION;
+ALTER TABLE users RENAME TO users_old;
+CREATE TABLE users (
+	id TEXT PRIMARY KEY,
+	email TEXT UNIQUE NOT NULL,
+	email_confirmed INTEGER DEFAULT 0,
+	password_hash TEXT NOT NULL,
+	role TEXT DEFAULT 'patient',
+	session_version INTEGER NOT NULL DEFAULT 0,
+	display_name TEXT,
+	last_login_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO users SELECT id,email,email_confirmed,password_hash,role,session_version,display_name,last_login_at,created_at,updated_at FROM users_old;
+DROP TABLE users_old;
+
+ALTER TABLE payments RENAME TO payments_old;
+CREATE TABLE payments (
+	id TEXT PRIMARY KEY,
+	user_id TEXT NOT NULL,
+	provider TEXT NOT NULL,
+	external_id TEXT,
+	preference_id TEXT,
+	init_point TEXT,
+	amount_cents INTEGER NOT NULL,
+	currency TEXT NOT NULL DEFAULT 'BRL',
+	status TEXT NOT NULL DEFAULT 'initialized',
+	status_detail TEXT,
+	payment_method TEXT,
+	installments INTEGER DEFAULT 1,
+	idempotency_key TEXT,
+	raw_payload_json TEXT,
+	processed_at TIMESTAMP,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+INSERT INTO payments (id,user_id,provider,external_id,preference_id,init_point,amount_cents,currency,status,status_detail,payment_method,installments,idempotency_key,raw_payload_json,processed_at,created_at,updated_at)
+	SELECT id,user_id,provider,external_id,preference_id,init_point,amount_cents,currency,status,status_detail,payment_method,installments,idempotency_key,raw_payload_json,processed_at,created_at,updated_at FROM payments_old;
+DROP TABLE payments_old;
+
+DROP TABLE IF EXISTS plan_change_log;
+DROP TABLE IF EXISTS plan_capabilities;
+DROP TABLE IF EXISTS plan_limits;
+DROP TABLE IF EXISTS plans;
+DROP TABLE IF EXISTS user_usage_counters;
+DROP TABLE IF EXISTS user_entitlement_overrides;
+DROP TABLE IF EXISTS user_entitlements_version;
+DROP TABLE IF EXISTS user_entitlement_override_log;
+COMMIT;
+VACUUM;
+```
+
+Caso deseje reintroduzir algum nível de feature flag no futuro, recomenda-se um design simplificado orientado a flags por usuário armazenadas em JSON ao invés do modelo completo de planos.
+
+---
+
 ## 🔐 JWT RS256 & JWKS
 
 O serviço suporta emissão de tokens JWT via RS256 (preferido) com fallback para HS256 se chaves RSA não estiverem configuradas.

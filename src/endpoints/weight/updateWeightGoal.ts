@@ -1,6 +1,5 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
-import { computeEffectiveEntitlements } from "../../service/permissions";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -14,8 +13,7 @@ export async function updateWeightGoalHandler(request: Request, env: Env): Promi
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('PESO_LOG')) return json({ error: 'Forbidden' }, 403);
+  // Modelo simplificado: sem verificação de capability
 
   let body: any; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   let goal: number | null = null;

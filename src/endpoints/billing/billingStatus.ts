@@ -25,12 +25,13 @@ export async function billingStatusHandler(request: Request, env: Env): Promise<
   try {
     // Get payment from database
     const payment = await env.DB.prepare(
-      'SELECT id, user_id, plan_id, status, status_detail, payment_method, installments, amount_cents, currency, external_id, preference_id, processed_at, created_at, updated_at FROM payments WHERE id = ? AND user_id = ?'
+      'SELECT id, user_id, purpose, consultation_type, status, status_detail, payment_method, installments, amount_cents, currency, external_id, preference_id, processed_at, created_at, updated_at FROM payments WHERE id = ? AND user_id = ?'
     ).bind(paymentId, String(payload.sub))
     .first<{
       id?: string;
       user_id?: string;
-      plan_id?: string;
+      purpose?: string;
+      consultation_type?: string;
       status?: string;
       status_detail?: string;
       payment_method?: string;
@@ -46,11 +47,6 @@ export async function billingStatusHandler(request: Request, env: Env): Promise<
 
     if (!payment?.id) return json({ error: 'Payment not found' }, 404);
 
-    // Get plan details
-    const plan = await env.DB.prepare('SELECT id, name FROM plans WHERE id = ?')
-      .bind(payment.plan_id)
-      .first<{ id?: string; name?: string }>();
-
     return json({
       payment_id: payment.id,
       status: payment.status,
@@ -62,7 +58,8 @@ export async function billingStatusHandler(request: Request, env: Env): Promise<
       external_id: payment.external_id,
       preference_id: payment.preference_id,
       processed_at: payment.processed_at,
-      plan: plan ? { id: plan.id, name: plan.name } : null,
+      purpose: payment.purpose || null,
+      consultation_type: payment.consultation_type || null,
       created_at: payment.created_at,
       updated_at: payment.updated_at
     });

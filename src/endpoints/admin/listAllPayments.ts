@@ -27,10 +27,10 @@ export async function listAllPaymentsHandler(request: Request, env: Env): Promis
     const userId = url.searchParams.get('user_id');
     
     let query = `SELECT 
-      p.id, p.user_id, p.plan_id, p.amount_cents, p.currency, p.status, p.status_detail,
+      p.id, p.user_id, p.purpose, p.consultation_type, p.amount_cents, p.currency, p.status, p.status_detail,
       p.payment_method, p.installments, p.external_id, p.preference_id, 
       p.processed_at, p.created_at, p.updated_at,
-      u.email as user_email, u.first_name, u.last_name
+      u.email as user_email
       FROM payments p 
       LEFT JOIN users u ON p.user_id = u.id
       WHERE 1=1`;

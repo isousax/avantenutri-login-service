@@ -19,7 +19,8 @@ interface StaticRoute { path: string; changefreq?: string; priority?: number }
 const STATIC_ROUTES: StaticRoute[] = [
   { path: '/', changefreq: 'daily', priority: 1.0 },
   { path: '/blog', changefreq: 'daily', priority: 0.9 },
-  { path: '/planos', changefreq: 'weekly', priority: 0.8 },
+  // '/planos' removido após migração para créditos
+  { path: '/pricing', changefreq: 'weekly', priority: 0.8 },
   { path: '/termos', changefreq: 'yearly', priority: 0.4 },
   { path: '/privacidade', changefreq: 'yearly', priority: 0.4 },
   { path: '/login', changefreq: 'monthly', priority: 0.2 },

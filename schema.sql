@@ -11,72 +11,6 @@ PRAGMA foreign_keys = ON;
 -- ===================================================================
 
 -- ===================================================================
--- PLANS (catálogo) + capabilities / limits - defined first because users.plan_id references plans
--- ===================================================================
-CREATE TABLE IF NOT EXISTS plans (
-  id TEXT PRIMARY KEY, -- free | self | full
-  name TEXT NOT NULL,
-  price_cents INTEGER NOT NULL DEFAULT 0,
-  active INTEGER NOT NULL DEFAULT 1,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS plan_capabilities (
-  plan_id TEXT NOT NULL,
-  capability_code TEXT NOT NULL,
-  PRIMARY KEY(plan_id, capability_code),
-  FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS plan_limits (
-  plan_id TEXT NOT NULL,
-  limit_key TEXT NOT NULL,
-  limit_value INTEGER NOT NULL,
-  PRIMARY KEY(plan_id, limit_key),
-  FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE
-);
-
--- Basic seed (idempotent)
-INSERT OR IGNORE INTO plans (id, name, price_cents) VALUES
-  ('free','Free',0),
-  ('self','Self-Managed',4900),
-  ('full','Full Care',14900);
-
-INSERT OR IGNORE INTO plan_capabilities (plan_id, capability_code) VALUES
- ('free','AGUA_LOG'),
- ('free','DIETA_VIEW'),
- ('free','RELATORIO_DOWNLOAD'),
- ('free','PESO_LOG'),
- ('free','REFEICAO_LOG'),
- ('self','AGUA_LOG'),
- ('self','DIETA_VIEW'),
- ('self','DIETA_EDIT'),
- ('self','CONSULTA_AGENDAR'),
- ('self','RELATORIO_DOWNLOAD'),
- ('self','PESO_LOG'),
- ('self','REFEICAO_LOG'),
- ('full','AGUA_LOG'),
- ('full','DIETA_VIEW'),
- ('full','DIETA_EDIT'),
- ('full','CONSULTA_AGENDAR'),
- ('full','CONSULTA_CANCELAR'),
- ('full','CHAT_NUTRI'),
- ('full','RELATORIO_DOWNLOAD'),
- ('full','PESO_LOG'),
- ('full','REFEICAO_LOG');
-
-INSERT OR IGNORE INTO plan_limits (plan_id, limit_key, limit_value) VALUES
- ('free','DIETA_REVISOES_MES',0),
- ('self','DIETA_REVISOES_MES',1),
- ('full','DIETA_REVISOES_MES',2),
- ('free','CONSULTAS_INCLUIDAS_MES',0),
- ('self','CONSULTAS_INCLUIDAS_MES',0),
- ('full','CONSULTAS_INCLUIDAS_MES',1),
- ('free','WATER_ML_DIA',1500),
- ('self','WATER_ML_DIA',2500),
- ('full','WATER_ML_DIA',3000);
-
--- ===================================================================
 -- USERS + related auth tables
 -- ===================================================================
 CREATE TABLE IF NOT EXISTS users (
@@ -90,13 +24,13 @@ CREATE TABLE IF NOT EXISTS users (
   email_confirmed INTEGER DEFAULT 0,
   password_hash TEXT NOT NULL,
   role TEXT DEFAULT 'patient',
-  plan_id TEXT DEFAULT 'free',
+  -- plan_id removido (sistema de planos descontinuado)
   session_version INTEGER NOT NULL DEFAULT 0,
   display_name TEXT,
   last_login_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE RESTRICT
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  -- (referência a planos removida)
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_last_login_at ON users(last_login_at);
@@ -224,62 +158,6 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
-
--- ===================================================================
--- USAGE / ENTITLEMENTS
--- ===================================================================
-CREATE TABLE IF NOT EXISTS user_usage_counters (
-  user_id TEXT NOT NULL,
-  key TEXT NOT NULL,
-  value INTEGER NOT NULL DEFAULT 0,
-  period_start TEXT NOT NULL,
-  period_end TEXT NOT NULL,
-  PRIMARY KEY(user_id, key, period_start),
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS user_entitlement_overrides (
-  id TEXT PRIMARY KEY DEFAULT (
-    lower(
-      hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-' ||
-      substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6))
-    )
-  ),
-  user_id TEXT NOT NULL,
-  type TEXT NOT NULL, -- capability-grant | capability-revoke | limit-set
-  key TEXT NOT NULL,  -- capability code or limit key
-  value INTEGER, -- for limit-set (nullable -> interpreted as infinite)
-  expires_at TIMESTAMP, -- nullable -> permanent until removed
-  reason TEXT,
-  created_by TEXT, -- admin user id
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_ent_override_user ON user_entitlement_overrides(user_id);
-CREATE INDEX IF NOT EXISTS idx_ent_override_expires ON user_entitlement_overrides(expires_at);
-
-CREATE TABLE IF NOT EXISTS user_entitlements_version (
-  user_id TEXT PRIMARY KEY,
-  version INTEGER NOT NULL DEFAULT 0,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS user_entitlement_override_log (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  override_id TEXT,
-  user_id TEXT NOT NULL,
-  action TEXT NOT NULL, -- create | delete
-  snapshot_json TEXT,
-  created_by TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_ent_override_log_user ON user_entitlement_override_log(user_id);
 
 -- ===================================================================
 -- BLOG POSTS (public content / marketing) + views
@@ -570,7 +448,9 @@ CREATE TABLE IF NOT EXISTS payments (
     )
   ),
   user_id TEXT NOT NULL,
-  plan_id TEXT NOT NULL,
+  -- plan_id removido
+  purpose TEXT, -- ex: 'consultation'
+  consultation_type TEXT, -- avaliacao_completa | reavaliacao
   provider TEXT NOT NULL, -- e.g. MERCADOPAGO
   external_id TEXT, -- provider payment id
   preference_id TEXT, -- for checkout pro - MP preference id
@@ -586,29 +466,54 @@ CREATE TABLE IF NOT EXISTS payments (
   processed_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE RESTRICT
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  -- referência a planos removida
 );
 
 CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_external ON payments(external_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
 
-CREATE TABLE IF NOT EXISTS plan_change_log (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+-- ===================================================================
+-- CONSULTATION CREDITS (gerados após pagamento aprovado)
+-- ===================================================================
+CREATE TABLE IF NOT EXISTS consultation_credits (
+  id TEXT PRIMARY KEY DEFAULT (
+    lower(
+      hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-' ||
+      substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6))
+    )
+  ),
   user_id TEXT NOT NULL,
-  old_plan_id TEXT,
-  new_plan_id TEXT NOT NULL,
-  reason TEXT NOT NULL, -- payment | admin | downgrade | refund
+  type TEXT NOT NULL, -- avaliacao_completa | reavaliacao
+  status TEXT NOT NULL DEFAULT 'available', -- available | used | expired
   payment_id TEXT,
-  meta_json TEXT,
+  consultation_id TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  used_at TIMESTAMP,
+  expires_at TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL
+  FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL,
+  FOREIGN KEY (consultation_id) REFERENCES consultations(id) ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_plan_change_user ON plan_change_log(user_id);
-CREATE INDEX IF NOT EXISTS idx_plan_change_payment ON plan_change_log(payment_id);
+CREATE INDEX IF NOT EXISTS idx_consultation_credits_user_status ON consultation_credits(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_consultation_credits_payment ON consultation_credits(payment_id);
+
+-- ===================================================================
+-- CONSULTATION PRICING (dynamic admin-configurable prices)
+-- ===================================================================
+CREATE TABLE IF NOT EXISTS consultation_pricing (
+  type TEXT PRIMARY KEY, -- avaliacao_completa | reavaliacao | futuros
+  amount_cents INTEGER NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'BRL',
+  active INTEGER NOT NULL DEFAULT 1,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Seeds handled at runtime (see pricing init). Example:
+-- INSERT OR IGNORE INTO consultation_pricing (type, amount_cents) VALUES ('avaliacao_completa',15000),('reavaliacao',9000),('only_diet',8000);
+
 
 -- ===================================================================
 -- ENTITLEMENT AUDIT (versioning + logs)

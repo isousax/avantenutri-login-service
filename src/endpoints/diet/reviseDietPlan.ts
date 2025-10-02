@@ -1,6 +1,5 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
-import { computeEffectiveEntitlements } from "../../service/permissions";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 function json(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS }); }
@@ -29,14 +28,9 @@ export async function reviseDietPlanHandler(request: Request, env: Env): Promise
   const { notes, dataPatch } = body || {};
 
   // Capability + role check (apenas admin pode revisar dietas de pacientes)
-  const ent = await computeEffectiveEntitlements(env, userId);
   const roleRow = await env.DB.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first<{ role?: string }>();
   if (roleRow?.role !== 'admin') return json({ error: 'Forbidden (admin only)' }, 403);
-  if (!ent.capabilities.includes('DIETA_EDIT')) return json({ error: 'Forbidden (missing DIETA_EDIT)' }, 403);
-
-  // Revision limit enforcement (monthly)
-  const limit = ent.limits['DIETA_REVISOES_MES'] ?? 0;
-  if (limit <= 0) return json({ error: 'Limite de revisões atingido para seu plano' }, 403);
+  // Sem limites de revisões no novo modelo
   const { start, end } = currentMonthRange();
   try {
     // Admin revisa planos de qualquer paciente; permitir plano de outro usuário quando admin
@@ -46,12 +40,7 @@ export async function reviseDietPlanHandler(request: Request, env: Env): Promise
     if (!existingPlan?.id) return json({ error: 'Plano não encontrado ou inativo' }, 404);
 
     // Count revisions (versions beyond #1) this month
-    const countRow = await env.DB.prepare(`SELECT COUNT(1) as c FROM diet_plan_versions 
-       WHERE plan_id = ? AND created_at >= ? || ' 00:00:00' AND created_at <= ? || ' 23:59:59'`)
-      .bind(planId, start, end)
-      .first<{ c?: number }>();
-    const used = (countRow?.c || 0) - 1; // first version not a revision
-    if (used >= limit) return json({ error: 'Você já usou todas as revisões deste mês' }, 403);
+    // Antes: contagem vs limite de revisões — agora ignorado
 
     // Get latest version number
     const lastV = await env.DB.prepare('SELECT version_number, data_json FROM diet_plan_versions WHERE id = ?')

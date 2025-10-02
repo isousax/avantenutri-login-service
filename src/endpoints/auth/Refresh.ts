@@ -211,7 +211,6 @@ export async function refreshTokenHandler(request: Request, env: Env): Promise<R
       token_type: "Bearer",
       refresh_token: newPlain,
       expires_at: session.expires_at,
-      display_name: userProfile?.display_name ?? null,
     },
     200,
     requestId

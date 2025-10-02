@@ -39,7 +39,7 @@ export async function adminListUsersHandler(
       resp.headers.set("X-Cache", "HIT");
       return resp;
     }
-  let base = `SELECT id, email, role, email_confirmed, session_version, created_at, display_name, last_login_at, plan_id FROM users`;
+  let base = `SELECT id, email, role, email_confirmed, session_version, created_at, display_name, last_login_at FROM users`;
     let where = "";
     const params: any[] = [];
     if (userId) {

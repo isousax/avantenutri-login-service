@@ -1,6 +1,5 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
-import { computeEffectiveEntitlements } from "../../service/permissions";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -16,8 +15,7 @@ export async function createWeightLogHandler(request: Request, env: Env): Promis
   const userId = String(payload.sub);
 
   // Capability check (PESO_LOG)
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('PESO_LOG')) return json({ error: 'Forbidden (missing PESO_LOG)' }, 403);
+  // Capabilities removidas: todos podem registrar peso
 
   let body: any; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const weightRaw = Number(body?.weight_kg);
@@ -60,8 +58,7 @@ export async function patchWeightLogHandler(request: Request, env: Env): Promise
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('PESO_LOG')) return json({ error: 'Forbidden' }, 403);
+  // Capabilities removidas
   let body: any; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   let setClauses: string[] = []; const binds: any[] = [];
   if (body.weight_kg != null) {

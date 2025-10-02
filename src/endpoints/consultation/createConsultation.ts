@@ -1,6 +1,5 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
-import { computeEffectiveEntitlements } from "../../service/permissions";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -22,8 +21,7 @@ export async function createConsultationHandler(request: Request, env: Env): Pro
   const { valid, payload } = await verifyAccessToken(env, token, {});
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   const userId = String(payload.sub);
-  const ent = await computeEffectiveEntitlements(env, userId);
-  if (!ent.capabilities.includes('CONSULTA_AGENDAR')) return json({ error: 'Forbidden (missing CONSULTA_AGENDAR)' }, 403);
+  // Capabilities removidas: todos podem agendar (após questionário completo)
 
   // Check if questionnaire is complete before allowing consultation booking
   try {
@@ -46,26 +44,7 @@ export async function createConsultationHandler(request: Request, env: Env): Pro
 
   // Enforce monthly included consultations limit if limit > 0 (count scheduled + completed in current month)
   try {
-    const limit = ent.limits?.['CONSULTAS_INCLUIDAS_MES'];
-    if (typeof limit === 'number' && limit >= 0) {
-      const now = new Date();
-      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
-      const pad = (n:number)=> String(n).padStart(2,'0');
-      const fmt = (d:Date)=> `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
-      const startStr = fmt(start); const endStr = fmt(end);
-      const row = await env.DB.prepare(`SELECT COUNT(1) as c FROM consultations WHERE user_id = ? AND status IN ('scheduled','completed') AND scheduled_at >= ? || ' 00:00:00' AND scheduled_at <= ? || ' 23:59:59'`)
-        .bind(userId, startStr, endStr)
-        .first<{ c?: number }>();
-      const used = row?.c || 0;
-      if (limit === 0 && used >= 0) {
-        // No included consultations at all
-        return json({ error: 'limit_exceeded', limit, used });
-      }
-      if (limit > 0 && used >= limit) {
-        return json({ error: 'limit_exceeded', limit, used });
-      }
-    }
+    // Limites de plano desativados
   } catch {}
 
   let body: CreateConsultationBody; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
@@ -73,6 +52,21 @@ export async function createConsultationHandler(request: Request, env: Env): Pro
   const type = String(body.type).toLowerCase();
   const allowedTypes = ['avaliacao_completa','reavaliacao','outro'];
   if (!allowedTypes.includes(type)) return json({ error: 'invalid_type' }, 400);
+
+  // Exigir crédito para tipos avaliacao_completa / reavaliacao ("outro" gratuito por enquanto)
+  try {
+    if (type === 'avaliacao_completa' || type === 'reavaliacao') {
+      const credit = await env.DB.prepare('SELECT id FROM consultation_credits WHERE user_id = ? AND type = ? AND status = "available" ORDER BY created_at ASC LIMIT 1')
+        .bind(userId, type)
+        .first<{ id?: string }>();
+      if (!credit?.id) return json({ error: 'no_credit', message: 'Crédito de consulta necessário. Realize o pagamento primeiro.' }, 402);
+      // Guardar id de crédito para consumir após inserir a consulta
+      (body as any)._creditId = credit.id;
+    }
+  } catch (e) {
+    console.error('[createConsultation] Falha ao verificar crédito', e);
+    return json({ error: 'credit_check_failed' }, 500);
+  }
   const scheduledDate = new Date(body.scheduledAt);
   if (isNaN(scheduledDate.getTime())) return json({ error: 'invalid_datetime' }, 400);
   if (scheduledDate.getTime() < Date.now() - 2 * 60 * 1000) return json({ error: 'past_datetime' }, 400);
@@ -118,6 +112,15 @@ export async function createConsultationHandler(request: Request, env: Env): Pro
     await env.DB.prepare(`INSERT INTO consultations (id, user_id, type, scheduled_at, duration_min, notes, urgency) VALUES (?, ?, ?, ?, ?, ?, ?)`)
       .bind(id, userId, type, body.scheduledAt, durationMin, notes, urgency)
       .run();
+    if ((body as any)._creditId) {
+      try {
+        await env.DB.prepare('UPDATE consultation_credits SET status = "used", used_at = CURRENT_TIMESTAMP, consultation_id = ? WHERE id = ?')
+          .bind(id, (body as any)._creditId)
+          .run();
+      } catch (e) {
+        console.error('[createConsultation] Falha ao consumir crédito', e);
+      }
+    }
     return json({ ok: true, id, status: 'scheduled' }, 201);
   } catch (e:any) {
     return json({ error: 'Internal Error' }, 500);

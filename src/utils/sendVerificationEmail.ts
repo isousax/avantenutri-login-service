@@ -151,8 +151,8 @@ export async function sendVerificationEmail(
             
             <div class="message">
                 Bem-vindo(a) à <strong>Avante Nutri</strong>! 🌱<br>
-                Aqui, acreditamos que pequenas mudanças geram grandes transformações.<br>
-                Para começar sua jornada, confirme seu e-mail.
+                Pequenas mudanças geram grandes transformações — e o primeiro passo já foi dado.<br>
+                Confirme seu e-mail e vamos avançar juntos.
             </div>
 
             <div class="button-container">

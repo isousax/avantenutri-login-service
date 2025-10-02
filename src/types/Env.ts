@@ -33,7 +33,6 @@ export interface Env {
   // URLs for checkout redirects
   WEBHOOK_URL?: string;
   FRONTEND_URL?: string; // base URL for frontend (e.g., https://avantenutri.com)
-  BACKEND_URL?: string; // base URL for backend API (e.g., https://api.avantenutri.com)
   // R2 bucket para armazenar PDFs de dietas
   DIET_FILES?: R2Bucket; // binding opcional - se ausente, PDFs permanecem inline (evitar em produção)
 }

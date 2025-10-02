@@ -17,7 +17,6 @@
 		"ME_CACHE_TTL_MS": 3600,
 		"REFRESH_TOKEN_EXPIRATION_DAYS": 30,
 		"FRONTEND_URL": "https://avantenutri.vercel.app",
-		"BACKEND_URL": "https://login-service.avantenutri.workers.dev",
 		"WEBHOOK_URL": "https://webhook-proxy-eosin.vercel.app/api/mp-proxy-avante-nutri"
 	},
 	"d1_databases": [

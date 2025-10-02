@@ -86,7 +86,7 @@ export async function billingIntentHandler(request: Request, env: Env): Promise<
       },
       auto_return: 'approved',
       external_reference: paymentId,
-      notification_url: `${env.BACKEND_URL}/billing/webhook/mercadopago`,
+      notification_url: `${env.WEBHOOK_URL}`,
       expires: true,
       expiration_date_from: new Date().toISOString(),
       expiration_date_to: new Date(Date.now() + 30 * 60 * 1000).toISOString(),

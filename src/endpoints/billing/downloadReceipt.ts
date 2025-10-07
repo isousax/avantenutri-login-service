@@ -15,8 +15,9 @@ export async function downloadReceiptHandler(request: Request, env: Env): Promis
   if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
   
   const url = new URL(request.url);
-  const paymentId = url.pathname.split('/').pop();
-  
+  const pathSegments = url.pathname.split('/');
+  const paymentId = pathSegments[pathSegments.length - 2];
+
   if (!paymentId) {
     return json({ error: 'Payment ID required' }, 400);
   }

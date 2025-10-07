@@ -24,7 +24,7 @@ export async function createWaterLogHandler(request: Request, env: Env): Promise
   } else {
     const d = new Date();
     const pad = (n:number)=> String(n).padStart(2,'0');
-    dateStr = `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+    dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   }
 
   try {
@@ -36,10 +36,10 @@ export async function createWaterLogHandler(request: Request, env: Env): Promise
     // Increment usage counter month bucket (optional optimization for analytics) key: WATER_LOGS_QTD
     try {
       const now = new Date();
-      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-      const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       const pad = (n:number)=> String(n).padStart(2,'0');
-      const fmt = (d:Date)=> `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+      const fmt = (d:Date)=> `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
       const startStr = fmt(monthStart); const endStr = fmt(monthEnd);
       await env.DB.prepare(`INSERT INTO user_usage_counters (user_id, key, period_start, period_end, value) VALUES (?, 'WATER_LOGS_QTD', ?, ?, 1)
           ON CONFLICT(user_id, key, period_start) DO UPDATE SET value = value + 1`)

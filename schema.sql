@@ -168,6 +168,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   full_name TEXT,
   phone TEXT,
   birth_date DATE,
+  height INTEGER, -- altura em centímetros
   photo_url TEXT,
   bio TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -381,6 +382,10 @@ CREATE TABLE IF NOT EXISTS consultations (
 
 CREATE INDEX IF NOT EXISTS idx_consultations_user_time ON consultations(user_id, scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_consultations_status_time ON consultations(status, scheduled_at);
+
+-- Prevenir race conditions: não permitir dois agendamentos no mesmo horário
+CREATE UNIQUE INDEX IF NOT EXISTS idx_consultations_unique_scheduled_slot 
+ON consultations(scheduled_at) WHERE status = 'scheduled';
 
 CREATE TABLE IF NOT EXISTS consultation_availability_rules (
   id TEXT PRIMARY KEY DEFAULT (

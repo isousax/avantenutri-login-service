@@ -16,6 +16,8 @@ interface Body {
   display_name?: string;
   full_name?: string;
   phone?: string | null;
+  birth_date?: string | null;
+  height?: number | null; // altura em centímetros
   user_id?: string; // admin pode atualizar outro usuário
 }
 
@@ -60,9 +62,15 @@ export async function updateProfileHandler(
   if (fullName && /[\n\r\t]/.test(fullName))
     return json({ error: "full_name_invalid_chars" }, 400);
   const phoneRaw = typeof body.phone === 'string' ? body.phone.trim() : undefined;
+  const birthDateRaw = typeof body.birth_date === 'string' ? body.birth_date.trim() : undefined;
+  const heightRaw = body.height;
 
   let normalizedPhone: string | undefined;
   let wantPhoneChange = false;
+  let birthDate: string | null | undefined;
+  let wantBirthDateChange = false;
+  let height: number | null | undefined;
+  let wantHeightChange = false;
   if (phoneRaw !== undefined) {
     if (phoneRaw === '') {
       // Interpretar string vazia como remoção (null)
@@ -78,7 +86,68 @@ export async function updateProfileHandler(
     }
   }
 
-  if (!displayName && !fullName && !wantPhoneChange) return json({ error: "No changes" }, 400);
+  // Validação de birth_date
+  if (birthDateRaw !== undefined) {
+    if (birthDateRaw === '') {
+      // String vazia = remoção (null)
+      birthDate = null;
+      wantBirthDateChange = true;
+    } else {
+      // Validar formato YYYY-MM-DD
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(birthDateRaw)) {
+        return json({ error: "birth_date_invalid_format" }, 400);
+      }
+      
+      // Validar se é uma data válida
+      const date = new Date(birthDateRaw);
+      if (isNaN(date.getTime()) || date.toISOString().substring(0, 10) !== birthDateRaw) {
+        return json({ error: "birth_date_invalid" }, 400);
+      }
+      
+      // Validar se não é no futuro
+      const today = new Date();
+      if (date > today) {
+        return json({ error: "birth_date_future" }, 400);
+      }
+      
+      // Validar idade mínima (por exemplo, 10 anos)
+      const minDate = new Date();
+      minDate.setFullYear(minDate.getFullYear() - 120); // máximo 120 anos
+      if (date < minDate) {
+        return json({ error: "birth_date_too_old" }, 400);
+      }
+      
+      birthDate = birthDateRaw;
+      wantBirthDateChange = true;
+    }
+  }
+
+  // Validação de height (altura em centímetros)
+  if (heightRaw !== undefined) {
+    if (heightRaw === null) {
+      // null = remoção
+      height = null;
+      wantHeightChange = true;
+    } else if (typeof heightRaw === 'number') {
+      // Validar se está em uma faixa razoável (50cm a 300cm)
+      if (heightRaw < 50 || heightRaw > 300) {
+        return json({ error: "height_invalid_range", min: 50, max: 300 }, 400);
+      }
+      
+      // Validar se é um número inteiro positivo
+      if (!Number.isInteger(heightRaw) || heightRaw <= 0) {
+        return json({ error: "height_must_be_positive_integer" }, 400);
+      }
+      
+      height = heightRaw;
+      wantHeightChange = true;
+    } else {
+      return json({ error: "height_invalid_type" }, 400);
+    }
+  }
+
+  if (!displayName && !fullName && !wantPhoneChange && !wantBirthDateChange && !wantHeightChange) return json({ error: "No changes" }, 400);
   try {
     // Detectar mudanças
     const existing = await env.DB.prepare(
@@ -87,13 +156,15 @@ export async function updateProfileHandler(
       .bind(targetUserId)
       .first<{ display_name?: string; session_version?: number }>();
     const profile = await env.DB.prepare(
-      "SELECT full_name, phone FROM user_profiles WHERE user_id = ?"
+      "SELECT full_name, phone, birth_date, height FROM user_profiles WHERE user_id = ?"
     )
   .bind(targetUserId)
-      .first<{ full_name?: string; phone?: string | null }>();
+      .first<{ full_name?: string; phone?: string | null; birth_date?: string | null; height?: number | null }>();
   let updateUser = false;
   let updateProfileName = false;
   let updateProfilePhone = false;
+  let updateProfileBirthDate = false;
+  let updateProfileHeight = false;
     if (displayName && displayName !== existing?.display_name)
       updateUser = true;
     if (fullName && fullName !== profile?.full_name) updateProfileName = true;
@@ -106,7 +177,23 @@ export async function updateProfileHandler(
         updateProfilePhone = true;
       }
     }
-    if (!updateUser && !updateProfileName && !updateProfilePhone)
+    if (wantBirthDateChange) {
+      const currentBirthDate = profile?.birth_date || null;
+      if (birthDate !== currentBirthDate) {
+        // Validação especial: se já existe birth_date, não permitir alteração
+        if (currentBirthDate !== null && currentBirthDate !== '') {
+          return json({ error: "birth_date_already_set" }, 400);
+        }
+        updateProfileBirthDate = true;
+      }
+    }
+    if (wantHeightChange) {
+      const currentHeight = profile?.height || null;
+      if (height !== currentHeight) {
+        updateProfileHeight = true;
+      }
+    }
+    if (!updateUser && !updateProfileName && !updateProfilePhone && !updateProfileBirthDate && !updateProfileHeight)
       return json({ success: true, unchanged: true });
     if (updateUser) {
       await env.DB.prepare(
@@ -115,7 +202,7 @@ export async function updateProfileHandler(
   .bind(displayName, targetUserId)
         .first();
     }
-    if (updateProfileName || updateProfilePhone) {
+    if (updateProfileName || updateProfilePhone || updateProfileBirthDate || updateProfileHeight) {
       const hasProfile = !!profile;
       if (hasProfile) {
         // Construir SET dinâmico
@@ -129,6 +216,14 @@ export async function updateProfileHandler(
           sets.push("phone = ?");
           binds.push(normalizedPhone === '' ? null : normalizedPhone);
         }
+        if (updateProfileBirthDate) {
+          sets.push("birth_date = ?");
+          binds.push(birthDate);
+        }
+        if (wantHeightChange) {
+          sets.push("height = ?");
+          binds.push(height);
+        }
         sets.push("updated_at = CURRENT_TIMESTAMP");
   binds.push(targetUserId);
         await env.DB.prepare(
@@ -139,22 +234,24 @@ export async function updateProfileHandler(
       } else {
         // Inserir novo profile (apenas campos fornecidos)
         await env.DB.prepare(
-          "INSERT INTO user_profiles (user_id, full_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+          "INSERT INTO user_profiles (user_id, full_name, phone, birth_date, height, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
         )
           .bind(
             targetUserId,
             fullName || null,
-            normalizedPhone === '' ? null : normalizedPhone || null
+            normalizedPhone === '' ? null : normalizedPhone || null,
+            birthDate || null,
+            height || null
           )
           .first();
       }
     }
     // Invalidate list users cache so admin listing reflects new name
-  if (updateUser || updateProfileName || updateProfilePhone) invalidateUserListCache();
+  if (updateUser || updateProfileName || updateProfilePhone || updateProfileBirthDate || updateProfileHeight) invalidateUserListCache();
     let access_token: string | undefined;
     let newSessionVersion: number | undefined;
     const updatedSelf = targetUserId === requesterUserId;
-    if (updatedSelf && (updateUser || updateProfilePhone || updateProfileName)) {
+    if (updatedSelf && (updateUser || updateProfilePhone || updateProfileName || updateProfileBirthDate)) {
       // Emitir novo token com session_version e display_name atualizados
       const row = await env.DB.prepare(
         `SELECT u.id, u.email, u.role, u.session_version, u.display_name, p.full_name, p.phone, p.birth_date
@@ -197,7 +294,7 @@ export async function updateProfileHandler(
       resp.token_type = "Bearer";
       resp.display_name = displayName || existing?.display_name || null;
       if (newSessionVersion !== undefined) resp.session_version = newSessionVersion;
-    } else if (updatedSelf && (updateUser || updateProfileName || updateProfilePhone)) {
+    } else if (updatedSelf && (updateUser || updateProfileName || updateProfilePhone || updateProfileBirthDate)) {
       // Situação improvável: self update sem token novo
       resp.need_new_token = true;
     }

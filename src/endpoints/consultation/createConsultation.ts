@@ -108,10 +108,22 @@ export async function createConsultationHandler(request: Request, env: Env): Pro
       .bind(body.scheduledAt, body.scheduledAt)
       .first<any>();
     if (taken) return json({ error: 'slot_taken' }, 409);
+    
     const id = crypto.randomUUID();
-    await env.DB.prepare(`INSERT INTO consultations (id, user_id, type, scheduled_at, duration_min, notes, urgency) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id, userId, type, body.scheduledAt, durationMin, notes, urgency)
-      .run();
+    
+    // Inserir consulta com proteção contra race condition
+    try {
+      await env.DB.prepare(`INSERT INTO consultations (id, user_id, type, scheduled_at, duration_min, notes, urgency) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .bind(id, userId, type, body.scheduledAt, durationMin, notes, urgency)
+        .run();
+    } catch (e: any) {
+      // Capturar violação de constraint UNIQUE (race condition)
+      if (e.message?.includes('UNIQUE constraint failed') || e.message?.includes('idx_consultations_unique_scheduled_slot')) {
+        return json({ error: 'slot_taken', message: 'Este horário já foi ocupado por outro usuário' }, 409);
+      }
+      throw e; // Re-throw outros erros
+    }
+    
     if ((body as any)._creditId) {
       try {
         await env.DB.prepare('UPDATE consultation_credits SET status = "used", used_at = CURRENT_TIMESTAMP, consultation_id = ? WHERE id = ?')

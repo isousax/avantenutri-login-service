@@ -28,7 +28,7 @@ export async function createMealLogHandler(request: Request, env: Env): Promise<
   }
   const iso = dt.toISOString();
   const pad = (n:number)=> String(n).padStart(2,'0');
-  const dateStr = `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth()+1)}-${pad(dt.getUTCDate())}`;
+  const dateStr = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
   const description = typeof body?.description === 'string' && body.description.trim() ? body.description.trim().slice(0, 500) : null;
   const num = (v:any, max:number, decimals=0) => {
     if (v==null || v==='') return null;
@@ -88,10 +88,10 @@ export async function summaryMealLogsHandler(request: Request, env: Env): Promis
   const days = !Number.isFinite(daysRaw) || daysRaw <= 0 ? 7 : Math.min(90, Math.round(daysRaw));
   const end = new Date();
   const pad = (n:number)=> String(n).padStart(2,'0');
-  const fmt = (d:Date)=> `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+  const fmt = (d:Date)=> `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   const endStr = fmt(end);
-  const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
-  start.setUTCDate(start.getUTCDate() - (days - 1));
+  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  start.setDate(start.getDate() - (days - 1));
   const startStr = fmt(start);
   try {
     // fetch goals

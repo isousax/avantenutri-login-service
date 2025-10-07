@@ -167,11 +167,11 @@ export async function registerUser(
         maskedEmail
       );
       try {
-        // update password_hash + updated_at
+        // update password_hash + display_name + updated_at
         await env.DB.prepare(
-          "UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+          "UPDATE users SET password_hash = ?, display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
         )
-          .bind(passwordHash, existing.id)
+          .bind(passwordHash, displayName, existing.id)
           .run();
 
         // replace profile: delete + insert (simple, keeps id stable)
@@ -293,9 +293,9 @@ export async function registerUser(
     }
 
     const userRow = await env.DB.prepare(
-      "INSERT INTO users (email, password_hash, role, created_at, email_confirmed) VALUES (?, ?, ?, CURRENT_TIMESTAMP, 0) RETURNING id"
+      "INSERT INTO users (email, password_hash, role, display_name, created_at, email_confirmed) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0) RETURNING id"
     )
-      .bind(email, passwordHash, initialRole)
+      .bind(email, passwordHash, initialRole, displayName)
       .first<DBUser>();
 
     if (!userRow || !userRow.id) {
@@ -314,15 +314,15 @@ export async function registerUser(
     // FIX: corrigido número de placeholders (antes faltavam '?') causando erro 500 na primeira tentativa de registro
     if (birth_date) {
       await env.DB.prepare(
-        "INSERT INTO user_profiles (user_id, full_name, display_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        "INSERT INTO user_profiles (user_id, full_name, phone, birth_date, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
       )
-        .bind(createdUser.id, full_name, displayName, normalizedPhone, birth_date)
+        .bind(createdUser.id, full_name, normalizedPhone, birth_date)
         .run();
     } else {
       await env.DB.prepare(
-        "INSERT INTO user_profiles (user_id, full_name, display_name, phone, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        "INSERT INTO user_profiles (user_id, full_name, phone, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
       )
-        .bind(createdUser.id, full_name, displayName, normalizedPhone)
+        .bind(createdUser.id, full_name, normalizedPhone)
         .run();
     }
 

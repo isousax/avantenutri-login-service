@@ -19,7 +19,7 @@ export async function listWaterLogsHandler(request: Request, env: Env): Promise<
   const to = url.searchParams.get('to');
   const pad = (n:number)=> String(n).padStart(2,'0');
   const today = new Date();
-  const todayStr = `${today.getUTCFullYear()}-${pad(today.getUTCMonth()+1)}-${pad(today.getUTCDate())}`;
+  const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
   const isValidDate = (s:string)=> /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
   const fromStr = from && isValidDate(from) ? from : todayStr;
   const toStr = to && isValidDate(to) ? to : fromStr;

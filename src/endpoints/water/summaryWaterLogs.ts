@@ -20,10 +20,10 @@ export async function summaryWaterLogsHandler(request: Request, env: Env): Promi
 
   const now = new Date();
   const pad = (n:number)=> String(n).padStart(2,'0');
-  const fmt = (d:Date)=> `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+  const fmt = (d:Date)=> `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   const endStr = fmt(now);
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  start.setUTCDate(start.getUTCDate() - (days - 1));
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  start.setDate(start.getDate() - (days - 1));
   const startStr = fmt(start);
 
   try {
@@ -40,7 +40,7 @@ export async function summaryWaterLogsHandler(request: Request, env: Env): Promi
     while (cur <= now) {
       const ds = fmt(cur);
       daysArr.push({ date: ds, total_ml: map[ds] || 0 });
-      cur.setUTCDate(cur.getUTCDate() + 1);
+      cur.setDate(cur.getDate() + 1);
     }
     const totals = daysArr.map(d => d.total_ml);
     const sum = totals.reduce((a,b)=> a+b, 0);

@@ -7,17 +7,17 @@
 		"enabled": true
 	},
 	"vars": {
-		"SITE_DNS": "https://avantenutri.vercel.app",
-		"EMAIL_FROM": "Avante Nutri <souzacawanne@gmail.com>",
+		"SITE_DNS": "https://avantenutri.com.br",
+		"EMAIL_FROM": "Avante Nutri <no-reply@avantenutri.com.br>",
 		"EMAIL_REPLY_TO": "souzacawanne@gmail.com",
-		"JWT_EXPECTED_ISSUER": "https://avantenutri.vercel.app",
-		"JWT_EXPECTED_AUDIENCE": "https://avantenutri.vercel.app",
+		"JWT_EXPECTED_ISSUER": "https://avantenutri.com.br",
+		"JWT_EXPECTED_AUDIENCE": "https://avantenutri.com.br",
 		"JWT_JWKS_KID": "k1",
 		"JWT_EXPIRATION_SEC": 3600,	
 		"ME_CACHE_TTL_MS": 3600,
 		"REFRESH_TOKEN_EXPIRATION_DAYS": 30,
-		"FRONTEND_URL": "https://avantenutri.vercel.app",
-		"WEBHOOK_URL": "https://webhook-proxy-eosin.vercel.app/api/mp-proxy-avante-nutri"
+		"FRONTEND_URL": "https://avantenutri.com.br",
+		"WEBHOOK_URL": "https://webhook-proxy-eosin.com.br/api/mp-proxy-avante-nutri"
 	},
 	"d1_databases": [
 		{

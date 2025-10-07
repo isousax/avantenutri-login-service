@@ -1,6 +1,7 @@
 export function getDynamicCorsOrigin(origin: string | null, env: Env): string {
   const allowedOrigins = [
     "https://avantenutri.vercel.app",
+    "https://avantenutri.com.br",
     "http://localhost:5173",
   ];
 

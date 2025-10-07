@@ -71,6 +71,9 @@ import { listUserPaymentsHandler } from "./endpoints/billing/listUserPayments";
 import { listAllPaymentsHandler } from "./endpoints/admin/listAllPayments";
 import { adminListConsultationPricingHandler, adminUpsertConsultationPricingHandler, adminPatchConsultationPricingHandler } from './endpoints/admin/consultationPricing';
 import { publicConsultationPricingHandler, publicConsultationPricingStatusHandler } from './endpoints/consultation/publicPricing';
+import { consultationCreditsSummaryHandler } from './endpoints/consultation/creditsSummary';
+import { listConsultationCreditsHandler } from './endpoints/consultation/listCredits';
+import { adjustConsultationCreditsHandler } from './endpoints/consultation/adjustCredits';
 import {
   listOverridesHandler,
   createOverrideHandler,
@@ -144,6 +147,39 @@ export default {
       );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+    // Consultation credits summary
+    if (request.method === "GET" && url.pathname === "/consultations/credits/summary") {
+      const res = await consultationCreditsSummaryHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      return res;
+    }
+    // Consultation credits list
+    if (request.method === "GET" && url.pathname === "/consultations/credits") {
+      const res = await listConsultationCreditsHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      return res;
+    }
+    // Consultation credits adjust (admin)
+    if (request.method === "POST" && url.pathname === "/consultations/credits") {
+      const res = await adjustConsultationCreditsHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
       return res;
     }
     if (request.method === "GET" && url.pathname === "/consultations/pricing/status") {

@@ -117,6 +117,22 @@ CREATE TABLE IF NOT EXISTS role_change_log (
 
 CREATE INDEX IF NOT EXISTS idx_role_change_user ON role_change_log(user_id);
 
+-- Admin credit adjustment audit
+CREATE TABLE IF NOT EXISTS admin_credit_adjust_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  admin_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  delta INTEGER NOT NULL,
+  reason TEXT,
+  consumed_ids_json TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_credit_adjust_user ON admin_credit_adjust_log(user_id);
+
 -- Login attempts (per email+IP) and global (per email)
 CREATE TABLE IF NOT EXISTS login_attempts (
   email TEXT NOT NULL,

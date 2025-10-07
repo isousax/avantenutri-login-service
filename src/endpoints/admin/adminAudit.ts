@@ -60,6 +60,15 @@ export async function adminAuditHandler(
         : await stmt.bind(pageSize, offset).all<any>();
       return json({ page, pageSize, results: rows.results });
     }
+    if (type === "credits_adjust") {
+      const base = `SELECT id, admin_id, user_id, type, delta, reason, consumed_ids_json, created_at FROM admin_credit_adjust_log`;
+      const where = userFilter ? " WHERE user_id = ?" : "";
+      const stmt = env.DB.prepare(`${base}${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`);
+      const rows = userFilter
+        ? await stmt.bind(userFilter, pageSize, offset).all<any>()
+        : await stmt.bind(pageSize, offset).all<any>();
+      return json({ page, pageSize, results: rows.results });
+    }
     return json({ error: "Invalid type" }, 400);
   } catch (err: any) {
     return json({ error: "Internal Error", detail: err?.message }, 500);

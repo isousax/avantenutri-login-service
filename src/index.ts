@@ -68,6 +68,8 @@ import { billingIntentHandler } from "./endpoints/billing/billingIntent";
 import { billingStatusHandler } from "./endpoints/billing/billingStatus";
 import { mercadoPagoWebhookHandler } from "./endpoints/billing/mercadoPagoWebhook";
 import { listUserPaymentsHandler } from "./endpoints/billing/listUserPayments";
+import { getPaymentDetailsHandler } from "./endpoints/billing/getPaymentDetails";
+import { downloadReceiptHandler } from "./endpoints/billing/downloadReceipt";
 import { listAllPaymentsHandler } from "./endpoints/admin/listAllPayments";
 import { adminListConsultationPricingHandler, adminUpsertConsultationPricingHandler, adminPatchConsultationPricingHandler } from './endpoints/admin/consultationPricing';
 import { publicConsultationPricingHandler, publicConsultationPricingStatusHandler } from './endpoints/consultation/publicPricing';
@@ -200,6 +202,32 @@ export default {
       );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+
+    // Get payment details
+    if (request.method === "GET" && url.pathname.startsWith("/billing/payments/") && url.pathname.endsWith("/details")) {
+      const res = await getPaymentDetailsHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
+      return res;
+    }
+
+    // Download receipt
+    if (request.method === "GET" && url.pathname.startsWith("/billing/payments/") && url.pathname.endsWith("/receipt")) {
+      const res = await downloadReceiptHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
+      res.headers.set("X-Request-Id", requestId);
+      // Não definir CSP para downloads
       return res;
     }
 

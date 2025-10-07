@@ -471,7 +471,7 @@ CREATE TABLE IF NOT EXISTS payments (
   user_id TEXT NOT NULL,
   -- plan_id removido
   purpose TEXT, -- ex: 'consultation'
-  consultation_type TEXT, -- avaliacao_completa | reavaliacao
+  consultation_type TEXT, -- avaliacao_completa | reavaliacao | only_diet
   provider TEXT NOT NULL, -- e.g. MERCADOPAGO
   external_id TEXT, -- provider payment id
   preference_id TEXT, -- for checkout pro - MP preference id
@@ -483,7 +483,6 @@ CREATE TABLE IF NOT EXISTS payments (
   payment_method TEXT, -- card, pix, boleto, etc
   installments INTEGER DEFAULT 1,
   idempotency_key TEXT,
-  raw_payload_json TEXT,
   processed_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

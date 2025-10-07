@@ -1,5 +1,5 @@
 import type { Env } from '../../types/Env';
-import { verifyAccessToken } from '../../service/tokenVerify';
+import { requireAdmin } from '../../middleware/requireAdmin';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -10,12 +10,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 export async function adminListConsultationPricingHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'GET') return json({ error: 'Method Not Allowed' }, 405);
-  const auth = request.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
-  const token = auth.slice(7);
-  const { valid, payload } = await verifyAccessToken(env, token, {});
-  if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
-  if (!payload.roles?.includes('admin')) return json({ error: 'Forbidden' }, 403);
+  
+  const auth = await requireAdmin(request, env);
+  if (!auth.ok) return (auth as any).response as Response;
+  
   try {
     const rows = await env.DB.prepare('SELECT type, amount_cents, currency, active, updated_at FROM consultation_pricing ORDER BY type').all();
     return json({ ok: true, pricing: rows.results || [] });
@@ -26,12 +24,10 @@ export async function adminListConsultationPricingHandler(request: Request, env:
 
 export async function adminUpsertConsultationPricingHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'PUT') return json({ error: 'Method Not Allowed' }, 405);
-  const auth = request.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
-  const token = auth.slice(7);
-  const { valid, payload } = await verifyAccessToken(env, token, {});
-  if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
-  if (!payload.roles?.includes('admin')) return json({ error: 'Forbidden' }, 403);
+  
+  const auth = await requireAdmin(request, env);
+  if (!auth.ok) return (auth as any).response as Response;
+  
   let body: any; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const { type, amount_cents, active } = body || {};
   if (!type || typeof amount_cents !== 'number') return json({ error: 'missing_fields' }, 400);
@@ -48,12 +44,10 @@ export async function adminUpsertConsultationPricingHandler(request: Request, en
 
 export async function adminPatchConsultationPricingHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'PATCH') return json({ error: 'Method Not Allowed' }, 405);
-  const auth = request.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
-  const token = auth.slice(7);
-  const { valid, payload } = await verifyAccessToken(env, token, {});
-  if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
-  if (!payload.roles?.includes('admin')) return json({ error: 'Forbidden' }, 403);
+  
+  const auth = await requireAdmin(request, env);
+  if (!auth.ok) return (auth as any).response as Response;
+  
   const match = request.url.match(/consultations\/pricing\/(.+)$/);
   if (!match) return json({ error: 'missing_type' }, 400);
   const type = decodeURIComponent(match[1]);

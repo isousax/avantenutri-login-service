@@ -107,8 +107,8 @@ export async function billingIntentHandler(request: Request, env: Env): Promise<
       console.error('[MercadoPago] Preference creation failed:', mpData);
       return json({ error: 'provider_error', details: mpData }, 500);
     }
-    await env.DB.prepare('UPDATE payments SET preference_id = ?, init_point = ?, raw_payload_json = ? WHERE id = ?')
-      .bind(mpData.id || null, mpData.init_point || null, JSON.stringify(mpData).slice(0,8000), paymentId)
+    await env.DB.prepare('UPDATE payments SET preference_id = ?, init_point = ? WHERE id = ?')
+      .bind(mpData.id || null, mpData.init_point || null, paymentId)
       .run();
   return json({ ok: true, payment_id: paymentId, type, amount_cents: amount, checkout_url: mpData?.init_point || null, preference_id: mpData?.id || null });
   } catch (e:any) {

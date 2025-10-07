@@ -100,13 +100,13 @@ export async function mercadoPagoWebhookHandler(request: Request, env: Env): Pro
       
       if (status) {
         // Update by external_id or external_reference
-        let updateQuery = 'UPDATE payments SET status = ?, status_detail = ?, payment_method = ?, installments = ?, external_id = COALESCE(external_id, ?), raw_payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE external_id = ?';
-        let updateParams = [status, statusDetail, paymentMethod, installments, String(paymentId), JSON.stringify(paymentData).slice(0,8000), String(paymentId)];
+        let updateQuery = 'UPDATE payments SET status = ?, status_detail = ?, payment_method = ?, installments = ?, external_id = COALESCE(external_id, ?), updated_at = CURRENT_TIMESTAMP WHERE external_id = ?';
+        let updateParams = [status, statusDetail, paymentMethod, installments, String(paymentId), String(paymentId)];
         
         // If external_reference matches our payment_id format, also try updating by that
         if (externalReference) {
-          updateQuery = 'UPDATE payments SET status = ?, status_detail = ?, payment_method = ?, installments = ?, external_id = COALESCE(external_id, ?), raw_payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE external_id = ? OR id = ?';
-          updateParams = [status, statusDetail, paymentMethod, installments, String(paymentId), JSON.stringify(paymentData).slice(0,8000), String(paymentId), externalReference];
+          updateQuery = 'UPDATE payments SET status = ?, status_detail = ?, payment_method = ?, installments = ?, external_id = COALESCE(external_id, ?), updated_at = CURRENT_TIMESTAMP WHERE external_id = ? OR id = ?';
+          updateParams = [status, statusDetail, paymentMethod, installments, String(paymentId), String(paymentId), externalReference];
         }
         
         await env.DB.prepare(updateQuery).bind(...updateParams).run();

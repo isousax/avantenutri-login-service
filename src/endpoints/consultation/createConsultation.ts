@@ -50,12 +50,12 @@ export async function createConsultationHandler(request: Request, env: Env): Pro
   let body: CreateConsultationBody; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   if (!body?.scheduledAt || !body?.type) return json({ error: 'missing_fields' }, 400);
   const type = String(body.type).toLowerCase();
-  const allowedTypes = ['avaliacao_completa','reavaliacao','outro'];
+  const allowedTypes = ['avaliacao_completa','reavaliacao','outro','only_diet'];
   if (!allowedTypes.includes(type)) return json({ error: 'invalid_type' }, 400);
 
-  // Exigir crédito para tipos avaliacao_completa / reavaliacao ("outro" gratuito por enquanto)
+  // Exigir crédito para tipos avaliacao_completa / reavaliacao / only_diet ("outro" gratuito por enquanto)
   try {
-    if (type === 'avaliacao_completa' || type === 'reavaliacao') {
+    if (type === 'avaliacao_completa' || type === 'reavaliacao' || type === 'only_diet') {
       const credit = await env.DB.prepare('SELECT id FROM consultation_credits WHERE user_id = ? AND type = ? AND status = "available" ORDER BY created_at ASC LIMIT 1')
         .bind(userId, type)
         .first<{ id?: string }>();

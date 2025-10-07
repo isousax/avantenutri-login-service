@@ -23,7 +23,7 @@ export async function adjustConsultationCreditsHandler(request: Request, env: En
   const type = String(body.type || '');
   const delta = Number(body.delta || 0);
   const reason = body.reason ? String(body.reason).slice(0, 500) : null;
-    if (!userId || !type || !['avaliacao_completa','reavaliacao'].includes(type)) return json({ error: 'invalid_payload' }, 400);
+    if (!userId || !type || !['avaliacao_completa','reavaliacao','only_diet'].includes(type)) return json({ error: 'invalid_payload' }, 400);
     if (!Number.isInteger(delta) || delta === 0) return json({ error: 'invalid_delta' }, 400);
 
     if (delta > 0) {

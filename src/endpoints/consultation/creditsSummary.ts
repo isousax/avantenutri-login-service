@@ -24,7 +24,7 @@ export async function consultationCreditsSummaryHandler(request: Request, env: E
 
       // Aggregate counts per user and type/status
       const rows = await env.DB.prepare(
-        `SELECT c.user_id, u.full_name, u.email, c.type, c.status, COUNT(*) as cnt, MAX(c.created_at) as updated_at
+        `SELECT c.user_id, u.display_name, u.email, c.type, c.status, COUNT(*) as cnt, MAX(c.created_at) as updated_at
          FROM consultation_credits c
          LEFT JOIN users u ON u.id = c.user_id
          GROUP BY c.user_id, c.type, c.status
@@ -38,7 +38,7 @@ export async function consultationCreditsSummaryHandler(request: Request, env: E
         if (!map.has(uid)) {
           map.set(uid, {
             user_id: uid,
-            name: r.full_name || undefined,
+            name: r.display_name || undefined,
             email: r.email || undefined,
             avaliacao_completa: { available: 0, used: 0, expired: 0 },
             reavaliacao: { available: 0, used: 0, expired: 0 },

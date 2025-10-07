@@ -31,6 +31,8 @@ export async function downloadReceiptHandler(request: Request, env: Env): Promis
     `).bind(paymentId, String(payload.sub)).first();
 
     console.log('Payment fetched for receipt:', payment);
+    console.log('Payload sub:', payload.sub);
+    console.log('Payment ID:', paymentId);
     if (!payment) {
       return json({ error: 'Payment not found' }, 404);
     }

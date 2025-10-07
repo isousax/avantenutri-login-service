@@ -97,7 +97,8 @@ export async function meHandler(request: Request, env: Env): Promise<Response> {
       email: row.email ?? "",
       role: row.role ?? "patient",
       full_name: row.full_name ?? "",
-      display_name: row.display_name ?? null,
+      // Prefer explicit display_name; if not present, fall back to full_name so frontend always has a display_name
+      display_name: row.display_name ?? row.full_name ?? null,
       phone: row.phone ?? null,
       birth_date: row.birth_date ?? null,
       photo_url: row.photo_url ?? null,

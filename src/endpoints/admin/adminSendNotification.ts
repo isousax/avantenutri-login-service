@@ -7,7 +7,7 @@ interface NotificationRequest {
   type: 'info' | 'warning' | 'success' | 'error';
   target_type: 'all' | 'specific' | 'group';
   target_users?: string[];
-  target_group?: 'active' | 'incomplete_questionnaire' | 'recent_signups';
+  target_group?: 'email_confirmed' | 'incomplete_questionnaire' | 'recent_signups';
   expires_at?: string;
 }
 
@@ -44,7 +44,7 @@ export async function adminSendNotificationHandler(
     switch (data.target_type) {
       case 'all':
         const allUsersResult = await env.DB.prepare(
-          "SELECT id FROM users WHERE active = 1"
+          "SELECT id FROM users WHERE email_confirmed = 1"
         ).all();
         targetUserIds = allUsersResult.results?.map((u: any) => u.id) || [];
         break;
@@ -81,18 +81,18 @@ export async function adminSendNotificationHandler(
 
         let groupQuery = "";
         switch (data.target_group) {
-          case 'active':
-            groupQuery = "SELECT id FROM users WHERE active = 1 AND last_login_at >= datetime('now', '-30 days')";
+          case 'email_confirmed':
+            groupQuery = "SELECT id FROM users WHERE email_confirmed = 1 AND last_login_at >= datetime('now', '-30 days')";
             break;
           case 'incomplete_questionnaire':
             groupQuery = `
               SELECT u.id FROM users u 
               LEFT JOIN questionarios q ON u.id = q.user_id 
-              WHERE u.active = 1 AND q.user_id IS NULL
+              WHERE u.email_confirmed = 1 AND q.user_id IS NULL
             `;
             break;
           case 'recent_signups':
-            groupQuery = "SELECT id FROM users WHERE active = 1 AND created_at >= datetime('now', '-7 days')";
+            groupQuery = "SELECT id FROM users WHERE email_confirmed = 1 AND created_at >= datetime('now', '-7 days')";
             break;
           default:
             return new Response(

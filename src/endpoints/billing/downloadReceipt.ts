@@ -1,88 +1,120 @@
-import type { Env } from '../../types/Env';
-import { verifyAccessToken } from '../../service/tokenVerify';
+import type { Env } from "../../types/Env";
+import { verifyAccessToken } from "../../service/tokenVerify";
 
-const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store",
+};
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 
-export async function downloadReceiptHandler(request: Request, env: Env): Promise<Response> {
-  if (request.method !== 'GET') return json({ error: 'Method Not Allowed' }, 405);
-  
-  const auth = request.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
-  
+export async function downloadReceiptHandler(
+  request: Request,
+  env: Env
+): Promise<Response> {
+  if (request.method !== "GET")
+    return json({ error: "Method Not Allowed" }, 405);
+
+  const auth = request.headers.get("authorization");
+  if (!auth?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+
   const token = auth.slice(7);
   const { valid, payload } = await verifyAccessToken(env, token, {});
-  if (!valid || !payload) return json({ error: 'Unauthorized' }, 401);
-  
+  if (!valid || !payload) return json({ error: "Unauthorized" }, 401);
+
   const url = new URL(request.url);
-  const pathSegments = url.pathname.split('/');
+  const pathSegments = url.pathname.split("/");
   const paymentId = pathSegments[pathSegments.length - 2];
 
   if (!paymentId) {
-    return json({ error: 'Payment ID required' }, 400);
+    return json({ error: "Payment ID required" }, 400);
   }
-  
+
   try {
     // Buscar dados do pagamento e usuário
-    const payment = await env.DB.prepare(`
-      SELECT p.*, u.display_name, u.email
-      FROM payments p
-      JOIN users u ON p.user_id = u.id
-      WHERE p.id = ? AND p.user_id = ?
-    `).bind(paymentId, String(payload.sub)).first();
+    const payment = await env.DB.prepare(
+      `
+        SELECT 
+          p.id, p.consultation_type, p.payment_method, p.external_id,
+          p.amount_cents, p.currency, p.processed_at, p.created_at, p.status,
+          u.display_name, u.email
+        FROM payments p
+        JOIN users u ON p.user_id = u.id
+        WHERE p.id = ? AND p.user_id = ?
+      `
+    )
+      .bind(paymentId, String(payload.sub))
+      .first();
 
     if (!payment) {
-      return json({ error: 'Payment not found' }, 404);
+      return json({ error: "Payment not found" }, 404);
     }
 
     // Só permitir download de recibos para pagamentos aprovados
     const status = (payment.status as string).toLowerCase();
-    if (!['approved', 'completed', 'paid'].includes(status)) {
-      return json({ error: 'Receipt not available for this payment status' }, 400);
+    if (!["approved", "completed", "paid"].includes(status)) {
+      return json(
+        { error: "Receipt not available for this payment status" },
+        400
+      );
     }
 
     // Gerar HTML do recibo
     const receiptHtml = generateReceiptHtml(payment);
-    
+
     // Retornar HTML do recibo
     return new Response(receiptHtml, {
       headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': `attachment; filename="recibo-${paymentId}.html"`,
-        'Cache-Control': 'no-store'
-      }
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Disposition": `attachment; filename="recibo-${paymentId}.html"`,
+        "Cache-Control": "max-age=600", // 10 minutes
+      },
     });
   } catch (e: any) {
-    console.error('Error generating receipt:', e);
-    return json({ error: 'Internal Error' }, 500);
+    console.error("Error generating receipt:", e);
+    return json({ error: "Internal Error" }, 500);
   }
 }
 
 function generateReceiptHtml(payment: any): string {
-  const formatAmount = (cents: number, currency: string = 'BRL') => {
-    return new Intl.NumberFormat('pt-BR', { 
-      style: 'currency', 
-      currency 
-    }).format(cents / 100);
+  const formatAmount = (cents: number, currency: string = "BRL") => {
+    try {
+      return new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency,
+      }).format(cents / 100);
+    } catch (error) {
+      return `R$ ${(cents / 100).toFixed(2)}`;
+    }
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        throw new Error("Data inválida");
+      }
+      return date.toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (error) {
+      return "Data não disponível";
+    }
   };
 
   const getServiceName = (consultationType: string) => {
-    switch (consultationType) {
-      case 'avaliacao_completa': return 'Avaliação Completa';
-      case 'reavaliacao': return 'Reavaliação';
-      case 'only_diet': return 'Apenas Dieta';
-      default: return 'Serviço de Nutrição';
-    }
+    const services: Record<string, string> = {
+      avaliacao_completa: "Avaliação Completa",
+      reavaliacao: "Reavaliação",
+      only_diet: "Apenas Dieta",
+      acompanhamento_mensal: "Acompanhamento Mensal",
+      orientacao_nutricional: "Orientação Nutricional",
+    };
+    return services[consultationType] || "Serviço de Nutrição";
   };
 
   return `
@@ -191,13 +223,15 @@ function generateReceiptHtml(payment: any): string {
         <div class="receipt-info">
             <div class="info-section">
                 <h3>Cliente</h3>
-                <p><strong>${payment.display_name || 'Cliente'}</strong></p>
+                <p><strong>${payment.display_name || "Cliente"}</strong></p>
                 <p>${payment.email}</p>
             </div>
             <div class="info-section">
                 <h3>Recibo</h3>
                 <p><strong>Nº:</strong> ${payment.id}</p>
-                <p><strong>Data:</strong> ${formatDate(payment.processed_at || payment.created_at)}</p>
+                <p><strong>Data:</strong> ${formatDate(
+                  payment.processed_at || payment.created_at
+                )}</p>
                 <p><strong>Status:</strong> <span class="status">PAGO</span></p>
             </div>
         </div>
@@ -210,24 +244,34 @@ function generateReceiptHtml(payment: any): string {
             </div>
             <div class="detail-row">
                 <span>Forma de Pagamento:</span>
-                <span>${payment.payment_method || 'Cartão/PIX'}</span>
+                <span>${payment.payment_method || "Cartão/PIX"}</span>
             </div>
-            ${payment.external_id ? `
+            ${
+              payment.external_id
+                ? `
             <div class="detail-row">
                 <span>ID Externo:</span>
                 <span>${payment.external_id}</span>
             </div>
-            ` : ''}
+            `
+                : ""
+            }
             <div class="detail-row">
                 <span>Total Pago:</span>
-                <span><strong>${formatAmount(payment.amount_cents, payment.currency)}</strong></span>
+                <span><strong>${formatAmount(
+                  payment.amount_cents,
+                  payment.currency
+                )}</strong></span>
             </div>
         </div>
         
         <div class="footer">
-            <p>Este é um recibo oficial do pagamento realizado na plataforma Avante Nutri.</p>
-            <p>Em caso de dúvidas, entre em contato conosco.</p>
-            <p>Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+          <p>Este é um recibo <strong>informativo</strong> gerado automaticamente pela plataforma Avante Nutri.</p>
+          <p>Não possui valor fiscal e pode ser utilizado apenas como comprovante do pagamento registrado no sistema.</p>
+          <p>Em caso de dúvidas, entre em contato com o suporte.</p>
+          <p>Gerado em ${new Date().toLocaleDateString(
+            "pt-BR"
+          )} às ${new Date().toLocaleTimeString("pt-BR")}</p>
         </div>
     </div>
 </body>

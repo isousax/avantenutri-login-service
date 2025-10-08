@@ -1,5 +1,6 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
+import { now, formatDateBR } from "../../utils/formatDateBR";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json",
@@ -85,24 +86,6 @@ function generateReceiptHtml(payment: any): string {
       }).format(cents / 100);
     } catch (error) {
       return `R$ ${(cents / 100).toFixed(2)}`;
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        throw new Error("Data inválida");
-      }
-      return date.toLocaleDateString("pt-BR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch (error) {
-      return "Data não disponível";
     }
   };
 
@@ -229,7 +212,7 @@ function generateReceiptHtml(payment: any): string {
             <div class="info-section">
                 <h3>Recibo</h3>
                 <p><strong>Nº:</strong> ${payment.id}</p>
-                <p><strong>Data:</strong> ${formatDate(
+                <p><strong>Data:</strong> ${formatDateBR(
                   payment.processed_at || payment.created_at
                 )}</p>
                 <p><strong>Status:</strong> <span class="status">PAGO</span></p>
@@ -266,12 +249,9 @@ function generateReceiptHtml(payment: any): string {
         </div>
         
         <div class="footer">
-          <p>Este é um recibo <strong>informativo</strong> gerado automaticamente pela plataforma Avante Nutri.</p>
-          <p>Não possui valor fiscal e pode ser utilizado apenas como comprovante do pagamento registrado no sistema.</p>
-          <p>Em caso de dúvidas, entre em contato com o suporte.</p>
-          <p>Gerado em ${new Date().toLocaleDateString(
-            "pt-BR"
-          )} às ${new Date().toLocaleTimeString("pt-BR")}</p>
+          <p>Recibo informativo gerado automaticamente pela Avante Nutri, sem valor fiscal, válido apenas como comprovante de pagamento registrado no sistema.</p>
+          <p>Dúvidas? Contate o suporte.</p>
+          <p>Gerado em ${now.toFormat("dd/MM/yyyy")} às ${now.toFormat("HH:mm")}</p>
         </div>
     </div>
 </body>

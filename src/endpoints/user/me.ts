@@ -49,7 +49,7 @@ export async function meHandler(request: Request, env: Env): Promise<Response> {
     // (see notes below). For now we fetch user + profile.
     const row = await env.DB.prepare(
       `SELECT u.id, u.email, u.role, u.email_confirmed, u.session_version, u.display_name,
-              p.full_name, p.phone, p.birth_date, p.photo_url
+              p.full_name, p.phone, p.birth_date, p.photo_url, p.height
        FROM users u
        LEFT JOIN user_profiles p ON p.user_id = u.id
        WHERE u.id = ?
@@ -67,6 +67,7 @@ export async function meHandler(request: Request, env: Env): Promise<Response> {
             phone?: string | null;
             birth_date?: string | null;
             photo_url?: string | null;
+            height?: number | null;
             display_name?: string | null;
           }
         | undefined
@@ -102,6 +103,7 @@ export async function meHandler(request: Request, env: Env): Promise<Response> {
       phone: row.phone ?? null,
       birth_date: row.birth_date ?? null,
       photo_url: row.photo_url ?? null,
+      height: row.height ?? null,
     };
 
     return jsonResponse({ user }, 200);

@@ -14,28 +14,40 @@ interface QuestionnairePayload {
 // Helper function to check if questionnaire is complete
 function isQuestionnaireComplete(data: any): boolean {
   if (!data || !data.submitted_at) return false;
-  
+
   const answers = data.answers || {};
-  const category = data.category;
-  
-  // Required fields for all categories
-  const requiredCommon = ['nome', 'email', 'telefone'];
-  const hasCommon = requiredCommon.every(field => answers[field]?.trim());
-  
-  if (!hasCommon || !category) return false;
-  
-  // Category-specific required fields
+  const category = data.category as string | null | undefined;
+
+  if (!category) return false;
+
+  // Helpers to support both legacy and current keys
+  const val = (k: string) => {
+    const v = answers[k];
+    return typeof v === 'string' ? v.trim() : v;
+  };
+  const hasAllNumeric = (...keys: string[]) => keys.every(k => {
+    const v = val(k);
+    if (v == null || v === '') return false;
+    const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+    return Number.isFinite(n) && Math.abs(n) > 0;
+  });
+
   switch (category) {
     case 'adulto':
-      return !!(answers['Peso (kg)'] && answers['Altura (cm)'] && answers['Idade']);
+      // Validar apenas as chaves reais atuais: 'peso', 'altura', 'idade'
+      return hasAllNumeric('peso', 'altura', 'idade');
     case 'esportiva':
-      return !!(answers['Peso (kg)'] && answers['Altura (cm)'] && answers['Idade']);
+      // Mesma validação do adulto com chaves reais
+      return hasAllNumeric('peso', 'altura', 'idade');
     case 'gestante':
-      return !!(answers['Peso antes da gravidez (kg)'] && answers['Peso atual (kg)']);
+      // Chaves reais atuais
+      return hasAllNumeric('peso_antes', 'peso_atual');
     case 'infantil':
-      return !!(answers['Peso atual (kg)'] && answers['Altura (cm)'] && answers['Idade']);
+      // Chaves reais atuais
+      return hasAllNumeric('peso_atual', 'altura', 'idade');
     default:
-      return true; // For other categories, just check if submitted
+      // Categorias futuras: considerar submetido como suficiente por ora
+      return true;
   }
 }
 

@@ -1,4 +1,5 @@
 import type { Env } from "../../types/Env";
+import { getDynamicCorsOrigin } from "../../utils/getDynamicCorsOrigin";
 import {
   findSessionByRefreshToken,
   revokeSessionById,
@@ -16,9 +17,10 @@ export async function logoutHandler(
 ): Promise<Response> {
   console.info("[logoutHandler] solicitação recebida");
 
+  const origin = request.headers.get("Origin");
   const JSON_HEADERS = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": env.SITE_DNS,
+    "Access-Control-Allow-Origin": getDynamicCorsOrigin(origin ?? undefined, env),
     "Access-Control-Allow-Credentials": "true",
     "Cache-Control": "no-store",
     Pragma: "no-cache",

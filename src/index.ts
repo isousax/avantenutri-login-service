@@ -94,9 +94,10 @@ import { getBlogPostByIdHandler } from "./endpoints/blog/getPostById";
 // @ts-ignore resolution hint
 import { buildDynamicSitemap } from "./sitemap/dynamicSitemap";
 import { getDynamicCorsOrigin } from "./utils/getDynamicCorsOrigin";
-function getCorsHeaders(env: Env, requestId?: string) {
+function getCorsHeaders(env: Env, requestId?: string, origin?: string | null) {
+  const allowOrigin = getDynamicCorsOrigin(origin ?? undefined, env);
   return {
-    "Access-Control-Allow-Origin": "*",// env.SITE_DNS,
+    "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, PUT, OPTIONS",
     "Access-Control-Allow-Credentials": "true",
     "Access-Control-Allow-Headers":
@@ -112,7 +113,8 @@ export default {
     const requestId = ensureRequestId(request);
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: getCorsHeaders(env, requestId) });
+      const origin = request.headers.get("Origin");
+      return new Response(null, { headers: getCorsHeaders(env, requestId, origin) });
     }
     // Billing intent (initiate payment)
     if (request.method === "POST" && url.pathname === "/billing/intent") {
@@ -1178,16 +1180,17 @@ export default {
     if (request.method === "GET" && url.pathname === "/sitemap.xml") {
       const xml = await buildDynamicSitemap(env);
       const etag = 'W/"s-' + xml.length.toString(16) + '"';
+      const origin = request.headers.get("Origin");
       if (request.headers.get("if-none-match") === etag) {
         return new Response(null, {
           status: 304,
-          headers: { ...getCorsHeaders(env, requestId), ETag: etag },
+          headers: { ...getCorsHeaders(env, requestId, origin), ETag: etag },
         });
       }
       return new Response(xml, {
         status: 200,
         headers: {
-          ...getCorsHeaders(env, requestId),
+          ...getCorsHeaders(env, requestId, origin),
           "Content-Type": "application/xml; charset=utf-8",
           "Cache-Control": "public, max-age=300, stale-while-revalidate=300",
           ETag: etag,
@@ -1196,7 +1199,11 @@ export default {
     }
     if (request.method === "GET" && url.pathname === "/blog/posts") {
       const res = await listBlogPostsHandler(request, env);
-      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
@@ -1206,14 +1213,22 @@ export default {
       /\/blog\/posts\/by-id\/[a-f0-9-]+$/.test(url.pathname)
     ) {
       const res = await getBlogPostByIdHandler(request, env);
-      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
     if (request.method === "GET" && url.pathname === "/blog/categories") {
       const res = await listBlogCategoriesHandler(request, env);
-      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
@@ -1223,7 +1238,11 @@ export default {
       /\/blog\/posts\/[^/]+$/.test(url.pathname)
     ) {
       const res = await getBlogPostHandler(request, env);
-      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
@@ -1233,14 +1252,22 @@ export default {
       /\/blog\/posts\/[^/]+\/related$/.test(url.pathname)
     ) {
       const res = await relatedBlogPostsHandler(request, env);
-      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
     if (request.method === "POST" && url.pathname === "/blog/posts") {
       const res = await adminCreateBlogPostHandler(request, env);
-      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
@@ -1250,7 +1277,11 @@ export default {
       /\/blog\/posts\/[a-f0-9-]+$/.test(url.pathname)
     ) {
       const res = await adminUpdateBlogPostHandler(request, env);
-      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
@@ -1260,7 +1291,11 @@ export default {
       /\/blog\/posts\/[a-f0-9-]+$/.test(url.pathname)
     ) {
       const res = await adminDeleteBlogPostHandler(request, env);
-      res.headers.set("Access-Control-Allow-Origin", env.SITE_DNS);
+      const origin = request.headers.get("Origin");
+      res.headers.set(
+        "Access-Control-Allow-Origin",
+        getDynamicCorsOrigin(origin, env)
+      );
       res.headers.set("X-Request-Id", requestId);
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
@@ -1282,18 +1317,12 @@ export default {
       return res;
     }
 
+    const origin = request.headers.get("Origin");
     return new Response(JSON.stringify({ error: "Not Found" }), {
       status: 404,
       headers: {
-        "Access-Control-Allow-Origin": env.SITE_DNS,
-        "Access-Control-Allow-Methods":
-          "GET, POST, PATCH, DELETE, PUT, OPTIONS",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Headers":
-          "Content-Type, Authorization, X-Request-Id, X-Api-Key",
-        "Content-Security-Policy": "frame-ancestors 'none';",
+        ...getCorsHeaders(env, requestId, origin),
         "Content-Type": "application/json",
-        "X-Request-Id": requestId,
       },
     });
   },

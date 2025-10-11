@@ -8,8 +8,8 @@ export async function adminGetUserQuestionnaireHandler(
   try {
     // Verify admin authorization
     const adminResult = await requireAdmin(request, env);
-    if (adminResult instanceof Response) {
-      return adminResult;
+    if (!adminResult.ok) {
+      return (adminResult as any).response as Response;
     }
 
     // Extract user ID from URL path
@@ -53,18 +53,18 @@ export async function adminGetUserQuestionnaireHandler(
       );
     }
 
-    // Parse the JSON respostas field
-    let parsedRespostas = {};
+  // Parse the JSON respostas field
+    let parsedAnswers = {};
     try {
-      parsedRespostas = JSON.parse(result.respostas as string);
+      parsedAnswers = JSON.parse(result.answers_json as string);
     } catch (e) {
       console.error("Error parsing questionnaire responses:", e);
-      parsedRespostas = {};
+      parsedAnswers = {};
     }
 
     const questionnaireData = {
-      categoria: result.categoria,
-      respostas: parsedRespostas,
+      category: result.category,
+      answers: parsedAnswers,
       created_at: result.created_at,
       updated_at: result.updated_at,
     };

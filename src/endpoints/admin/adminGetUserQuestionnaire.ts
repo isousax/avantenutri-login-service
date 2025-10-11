@@ -33,8 +33,8 @@ export async function adminGetUserQuestionnaireHandler(
 
     // Query questionnaire data for the specified user
     const result = await env.DB.prepare(`
-      SELECT categoria, respostas, created_at, updated_at
-      FROM questionarios 
+      SELECT category, answers_json, created_at, updated_at
+      FROM questionnaire_responses 
       WHERE user_id = ?
       ORDER BY updated_at DESC 
       LIMIT 1

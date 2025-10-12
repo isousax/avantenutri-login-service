@@ -21,9 +21,9 @@ export async function adminAuditHandler(
   }
   // 2) Se não autorizado por chave, tenta JWT de admin
   if (!authorized) {
-    const admin = await requireAdmin(request, env);
-    if (!admin.ok) {
-      return admin.response;
+    const adminCheck = await requireAdmin(request, env);
+    if ("response" in adminCheck) {
+      return adminCheck.response;
     }
     authorized = true;
   }

@@ -35,7 +35,14 @@ export async function adminListUsersHandler(
       user_id: userId || undefined,
     });
     if (cacheProbe.hit) {
-      const resp = json({ page, pageSize, results: cacheProbe.data });
+      const payload = cacheProbe.data;
+      const cachedResults = Array.isArray(payload)
+        ? payload
+        : (payload?.results ?? []);
+      const cachedHasMore = Array.isArray(payload)
+        ? cachedResults.length === pageSize
+        : Boolean(payload?.hasMore);
+      const resp = json({ page, pageSize, hasMore: cachedHasMore, results: cachedResults });
       resp.headers.set("X-Cache", "HIT");
       return resp;
     }
@@ -51,14 +58,17 @@ export async function adminListUsersHandler(
     }
     const order = " ORDER BY created_at DESC";
     const limit = " LIMIT ? OFFSET ?";
-    params.push(pageSize, offset);
+    params.push(pageSize + 1, offset);
     const stmt = env.DB.prepare(base + where + order + limit).bind(...params);
     const rows = await stmt.all<any>();
+    const all = rows.results || [];
+    const hasMore = all.length > pageSize;
+    const sliced = hasMore ? all.slice(0, pageSize) : all;
     setUserListCache(
       { page, pageSize, q: q || undefined, user_id: userId || undefined },
-      rows.results
+      { results: sliced, hasMore }
     );
-    const resp = json({ page, pageSize, results: rows.results });
+    const resp = json({ page, pageSize, hasMore, results: sliced });
     resp.headers.set("X-Cache", "MISS");
     return resp;
   } catch (err: any) {

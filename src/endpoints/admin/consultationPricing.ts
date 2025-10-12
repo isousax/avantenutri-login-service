@@ -12,7 +12,7 @@ export async function adminListConsultationPricingHandler(request: Request, env:
   if (request.method !== 'GET') return json({ error: 'Method Not Allowed' }, 405);
   
   const auth = await requireAdmin(request, env);
-  if (!auth.ok) return (auth as any).response as Response;
+  if (!auth.ok && 'response' in auth) return auth.response;
   
   try {
     const rows = await env.DB.prepare('SELECT type, amount_cents, currency, active, updated_at FROM consultation_pricing ORDER BY type').all();
@@ -26,7 +26,7 @@ export async function adminUpsertConsultationPricingHandler(request: Request, en
   if (request.method !== 'PUT') return json({ error: 'Method Not Allowed' }, 405);
   
   const auth = await requireAdmin(request, env);
-  if (!auth.ok) return (auth as any).response as Response;
+  if (!auth.ok && 'response' in auth) return auth.response;
   
   let body: any; try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const { type, amount_cents, active } = body || {};
@@ -46,7 +46,7 @@ export async function adminPatchConsultationPricingHandler(request: Request, env
   if (request.method !== 'PATCH') return json({ error: 'Method Not Allowed' }, 405);
   
   const auth = await requireAdmin(request, env);
-  if (!auth.ok) return (auth as any).response as Response;
+  if (!auth.ok && 'response' in auth) return auth.response;
   
   const match = request.url.match(/consultations\/pricing\/(.+)$/);
   if (!match) return json({ error: 'missing_type' }, 400);

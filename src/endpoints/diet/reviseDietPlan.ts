@@ -1,5 +1,6 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
+import { requireAdmin } from "../../middleware/requireAdmin";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 function json(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS }); }
@@ -27,9 +28,9 @@ export async function reviseDietPlanHandler(request: Request, env: Env): Promise
   let body:any; try { body = await request.json(); } catch { body = {}; }
   const { notes, dataPatch } = body || {};
 
-  // Capability + role check (apenas admin pode revisar dietas de pacientes)
-  const roleRow = await env.DB.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first<{ role?: string }>();
-  if (roleRow?.role !== 'admin') return json({ error: 'Forbidden (admin only)' }, 403);
+  // Apenas admin pode revisar dietas – usar util centralizado
+  const adminCheck = await requireAdmin(request, env);
+  if (!adminCheck.ok && 'response' in adminCheck) return adminCheck.response;
   // Sem limites de revisões no novo modelo
   const { start, end } = currentMonthRange();
   try {

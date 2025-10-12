@@ -1,5 +1,6 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
+import { requireAdmin } from "../../middleware/requireAdmin";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -27,9 +28,8 @@ export async function getDietPlanHandler(request: Request, env: Env): Promise<Re
       .first<any>();
     if (!plan?.id) return json({ error: 'Plano não encontrado' }, 404);
     if (plan.user_id !== userId) {
-      // Validar se solicitante é admin
-      const roleRow = await env.DB.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first<{ role?: string }>();
-      if (roleRow?.role !== 'admin') return json({ error: 'Forbidden' }, 403);
+      const adminCheck = await requireAdmin(request, env);
+      if (!adminCheck.ok && 'response' in adminCheck) return adminCheck.response;
     }
 
     const versionsRes = await env.DB.prepare(`SELECT id, version_number, generated_by, data_json, notes, created_at

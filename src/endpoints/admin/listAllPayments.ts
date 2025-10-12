@@ -8,7 +8,7 @@ export async function listAllPaymentsHandler(request: Request, env: Env): Promis
   if (request.method !== 'GET') return json({ error: 'Method Not Allowed' }, 405);
   
   const auth = await requireAdmin(request, env);
-  if (!auth.ok) return (auth as any).response as Response;
+  if (!auth.ok && 'response' in auth) return auth.response;
 
   try {
     const url = new URL(request.url);

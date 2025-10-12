@@ -1,15 +1,12 @@
 import type { Env } from "../../types/Env";
 import { json } from "./utils";
-import { verifyAccessToken } from "../../service/tokenVerify";
+import { requireRoles } from "../../middleware/requireRoles";
 
 // DELETE /blog/posts/:id  (admin/nutri)
 export async function adminDeleteBlogPostHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'DELETE') return json({ error: 'Method Not Allowed' }, 405);
-  const auth = request.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
-  const token = auth.slice(7);
-  const vr = await verifyAccessToken(env, token, {});
-  if (!vr.valid || !['admin','nutri'].includes(vr.payload.role)) return json({ error: 'Forbidden' }, 403);
+  const roleCheck = await requireRoles(request, env, ['admin','nutri']);
+  if (!roleCheck.ok && 'response' in roleCheck) return roleCheck.response;
   const url = new URL(request.url);
   const id = url.pathname.split('/').pop();
   if (!id) return json({ error: 'Not Found' }, 404);

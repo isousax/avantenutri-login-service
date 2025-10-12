@@ -1,5 +1,6 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
+import { requireAdmin } from "../../middleware/requireAdmin";
 import { generateJWT } from "../../service/generateJWT";
 import { invalidateUserListCache } from "../../cache/userListCache";
 import { normalizePhone, phoneErrorMessage } from "../../utils/normalizePhone";
@@ -42,10 +43,10 @@ export async function updateProfileHandler(
     return json({ error: "Invalid JSON" }, 400);
   }
   const requesterUserId = payload.sub as string;
-  const requesterRole = (payload.role as string) || 'patient';
   let targetUserId = requesterUserId;
   if (body.user_id && body.user_id !== requesterUserId) {
-    if (requesterRole !== 'admin') return json({ error: 'Forbidden' }, 403);
+    const adminCheck = await requireAdmin(request, env);
+    if (!adminCheck.ok && 'response' in adminCheck) return adminCheck.response;
     if (body.user_id.length < 8) return json({ error: 'Invalid user_id' }, 400);
     targetUserId = body.user_id;
   }

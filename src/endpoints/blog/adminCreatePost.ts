@@ -2,7 +2,7 @@ import type { Env } from "../../types/Env";
 import { json, slugify, ensureUniqueSlug, computeReadTime, tagsToCsv } from "./utils";
 import { marked } from 'marked';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
-import { verifyAccessToken } from "../../service/tokenVerify";
+import { requireRoles } from "../../middleware/requireRoles";
 
 function deriveExcerpt({ explicit, html, max = 220 }: { explicit?: string; html?: string; max?: number }) {
   if (explicit && explicit.trim()) return explicit.trim().slice(0, max);
@@ -26,11 +26,8 @@ function deriveExcerpt({ explicit, html, max = 220 }: { explicit?: string; html?
 // POST /blog/posts  (admin/nutri)
 export async function adminCreateBlogPostHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'POST') return json({ error: 'Method Not Allowed' }, 405);
-  const auth = request.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
-  const token = auth.slice(7);
-  const vr = await verifyAccessToken(env, token, {});
-  if (!vr.valid || !['admin','nutri'].includes(vr.payload.role)) return json({ error: 'Forbidden' }, 403);
+  const roleCheck = await requireRoles(request, env, ['admin','nutri']);
+  if (!roleCheck.ok && 'response' in roleCheck) return roleCheck.response;
   let body: any;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const { title, content_html, content_md, excerpt, category, tags, cover_image_url, status } = body || {};
@@ -49,7 +46,7 @@ export async function adminCreateBlogPostHandler(request: Request, env: Env): Pr
   const finalExcerpt = deriveExcerpt({ explicit: excerpt, html: finalHtml });
   try {
     await env.DB.prepare(`INSERT INTO blog_posts (slug, title, excerpt, content_html, author_name, author_id, category, tags_csv, cover_image_url, status, read_time_min, published_at, content_md) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(slug, title, finalExcerpt, finalHtml, vr.payload.display_name || null, vr.payload.sub || null, category || null, tagsToCsv(tags) || null, cover_image_url || null, status === 'published' ? 'published' : 'draft', rt, published, content_md || null)
+      .bind(slug, title, finalExcerpt, finalHtml, roleCheck.auth.display_name || null, roleCheck.auth.userId || null, category || null, tagsToCsv(tags) || null, cover_image_url || null, status === 'published' ? 'published' : 'draft', rt, published, content_md || null)
       .run();
     return json({ ok: true, slug });
   } catch (err:any) {

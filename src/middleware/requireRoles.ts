@@ -1,19 +1,18 @@
 import type { Env } from "../types/Env";
 import { verifyAccessToken } from "../service/tokenVerify";
 
-export interface AuthContext {
+export interface RoleAuthContext {
   userId: string;
   role: string | undefined;
   display_name?: string | null;
   session_version?: number;
 }
 
-export async function requireAdmin(
+export async function requireRoles(
   request: Request,
-  env: Env
-): Promise<
-  { ok: true; auth: AuthContext } | { ok: false; response: Response }
-> {
+  env: Env,
+  allowedRoles: string[]
+): Promise<{ ok: true; auth: RoleAuthContext } | { ok: false; response: Response }> {
   const auth = request.headers.get("Authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!token) {
@@ -38,7 +37,6 @@ export async function requireAdmin(
       ),
     };
   }
-  // Reconsulta o DB para confirmar role real (não confiar apenas no claim)
   const row = await env.DB.prepare(
     "SELECT role, session_version, display_name FROM users WHERE id = ?"
   )
@@ -66,7 +64,7 @@ export async function requireAdmin(
       }),
     };
   }
-  if (row.role !== "admin") {
+  if (!allowedRoles.includes(row.role)) {
     return {
       ok: false,
       response: new Response(JSON.stringify({ error: "Forbidden" }), {

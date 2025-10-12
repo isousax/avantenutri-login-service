@@ -2,7 +2,7 @@ import type { Env } from "../../types/Env";
 import { json, slugify, ensureUniqueSlug, computeReadTime, tagsToCsv } from "./utils";
 import { marked } from 'marked';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
-import { verifyAccessToken } from "../../service/tokenVerify";
+import { requireRoles } from "../../middleware/requireRoles";
 
 function deriveExcerpt({ explicit, html, max = 220 }: { explicit?: string; html?: string; max?: number }) {
   if (explicit && explicit.trim()) return explicit.trim().slice(0, max);
@@ -26,11 +26,8 @@ function deriveExcerpt({ explicit, html, max = 220 }: { explicit?: string; html?
 // PATCH /blog/posts/:id  (admin/nutri)
 export async function adminUpdateBlogPostHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'PATCH') return json({ error: 'Method Not Allowed' }, 405);
-  const auth = request.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
-  const token = auth.slice(7);
-  const vr = await verifyAccessToken(env, token, {});
-  if (!vr.valid || !['admin','nutri'].includes(vr.payload.role)) return json({ error: 'Forbidden' }, 403);
+  const roleCheck = await requireRoles(request, env, ['admin','nutri']);
+  if (!roleCheck.ok && 'response' in roleCheck) return roleCheck.response;
   const url = new URL(request.url);
   const id = url.pathname.split('/').pop();
   if (!id) return json({ error: 'Not Found' }, 404);

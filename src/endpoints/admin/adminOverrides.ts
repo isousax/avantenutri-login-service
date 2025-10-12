@@ -17,7 +17,8 @@ function parseIsoDate(input: any): string | null {
 
 export async function listOverridesHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'GET') return json({ error: 'Method Not Allowed' }, 405);
-  const auth = await requireAdmin(request, env); if (!auth.ok) return (auth as any).response;
+  const auth = await requireAdmin(request, env);
+  if (!auth.ok && 'response' in auth) return auth.response;
   const url = new URL(request.url);
   const userId = (url.searchParams.get('user_id') || '').trim();
   const status = (url.searchParams.get('status')||'').trim(); // active | expired | all
@@ -46,7 +47,8 @@ export async function listOverridesHandler(request: Request, env: Env): Promise<
 
 export async function createOverrideHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'POST') return json({ error: 'Method Not Allowed' }, 405);
-  const auth = await requireAdmin(request, env); if (!auth.ok) return (auth as any).response;
+  const auth = await requireAdmin(request, env);
+  if (!auth.ok && 'response' in auth) return auth.response;
   const body: Partial<{ user_id: string; type: string; key: string; value: any; expires_at?: string; reason?: string }> = await request.json().catch(()=> ({}));
   const { user_id, type, key, value, expires_at, reason } = body;
   if (!user_id || !type || !key) return json({ error: 'missing fields' }, 400);
@@ -88,7 +90,8 @@ export async function createOverrideHandler(request: Request, env: Env): Promise
 
 export async function deleteOverrideHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'DELETE') return json({ error: 'Method Not Allowed' }, 405);
-  const auth = await requireAdmin(request, env); if (!auth.ok) return (auth as any).response;
+  const auth = await requireAdmin(request, env);
+  if (!auth.ok && 'response' in auth) return auth.response;
   const m = /\/admin\/overrides\/([a-f0-9-]+)$/.exec(new URL(request.url).pathname);
   if (!m) return json({ error: 'invalid path' }, 400);
   const id = m[1];
@@ -113,7 +116,8 @@ export async function deleteOverrideHandler(request: Request, env: Env): Promise
 
 export async function patchOverrideHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'PATCH') return json({ error: 'Method Not Allowed' }, 405);
-  const auth = await requireAdmin(request, env); if (!auth.ok) return (auth as any).response;
+  const auth = await requireAdmin(request, env);
+  if (!auth.ok && 'response' in auth) return auth.response;
   const m = /\/admin\/overrides\/([a-f0-9-]+)$/.exec(new URL(request.url).pathname);
   if (!m) return json({ error: 'invalid path' }, 400);
   const id = m[1];
@@ -151,7 +155,8 @@ export async function patchOverrideHandler(request: Request, env: Env): Promise<
 
 export async function listOverrideLogsHandler(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'GET') return json({ error: 'Method Not Allowed' }, 405);
-  const auth = await requireAdmin(request, env); if (!auth.ok) return (auth as any).response;
+  const auth = await requireAdmin(request, env);
+  if (!auth.ok && 'response' in auth) return auth.response;
   const url = new URL(request.url);
   const userId = (url.searchParams.get('user_id')||'').trim();
   const action = (url.searchParams.get('action')||'').trim(); // create|update|delete

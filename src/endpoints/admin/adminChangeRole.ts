@@ -7,7 +7,7 @@ interface Body {
   reason?: string;
 }
 
-const ALLOWED_ROLES = ["patient", "admin"]; // ajustar se houver mais
+const ALLOWED_ROLES = ["patient", "admin", "nutri"]; // ajustar se houver mais
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -45,8 +45,8 @@ export async function adminChangeRoleHandler(
   }
 
   const authRes = await requireAdmin(request, env);
-  if (!authRes.ok) {
-    return (authRes as any).response as Response;
+  if (!authRes.ok && 'response' in authRes) {
+    return authRes.response;
   }
 
   let body: Body;

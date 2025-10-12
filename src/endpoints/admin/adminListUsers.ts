@@ -17,7 +17,7 @@ export async function adminListUsersHandler(
   if (request.method !== "GET")
     return json({ error: "Method Not Allowed" }, 405);
   const auth = await requireAdmin(request, env);
-  if (!auth.ok) return (auth as any).response as Response;
+  if (!auth.ok && 'response' in auth) return auth.response as Response;
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));
   const pageSize = Math.min(

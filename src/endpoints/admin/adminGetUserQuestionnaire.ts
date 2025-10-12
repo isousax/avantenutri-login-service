@@ -8,8 +8,8 @@ export async function adminGetUserQuestionnaireHandler(
   try {
     // Verify admin authorization
     const adminResult = await requireAdmin(request, env);
-    if (!adminResult.ok) {
-      return (adminResult as any).response as Response;
+    if (!adminResult.ok && 'response' in adminResult) {
+      return adminResult.response;
     }
 
     // Extract user ID from URL path

@@ -1,5 +1,6 @@
 import type { Env } from "../../types/Env";
 import { verifyAccessToken } from "../../service/tokenVerify";
+import { requireAdmin } from "../../middleware/requireAdmin";
 
 const JSON_HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache" };
 function json(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS }); }
@@ -17,13 +18,10 @@ export async function listDietPlansHandler(request: Request, env: Env): Promise<
   const includeArchived = url.searchParams.get('archived') === '1';
   const targetUser = url.searchParams.get('user_id'); // admin pode filtrar por paciente
   try {
-    // Verifica se solicitante é admin quando quiser ver outros usuários
-    let roleRow: { role?: string } | null = null;
+    // Verifica admin apenas quando a listagem for cross-user, usando o util centralizado
     if (targetUser && targetUser !== userId) {
-      roleRow = await env.DB.prepare('SELECT role FROM users WHERE id = ?').bind(userId).first<{ role?: string }>();
-      if (roleRow?.role !== 'admin') {
-        return json({ error: 'Forbidden (admin only for cross-user listing)' }, 403);
-      }
+      const adminCheck = await requireAdmin(request, env);
+      if (!adminCheck.ok && 'response' in adminCheck) return adminCheck.response;
     }
     const queryUser = targetUser && targetUser !== userId ? targetUser : userId;
   const rows = await env.DB.prepare(`SELECT dp.id,

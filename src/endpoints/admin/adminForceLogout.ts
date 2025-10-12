@@ -17,7 +17,7 @@ export async function adminForceLogoutHandler(
   if (request.method !== "POST")
     return json({ error: "Method Not Allowed" }, 405);
   const auth = await requireAdmin(request, env);
-  if (!auth.ok) return (auth as any).response as Response;
+  if (!auth.ok && 'response' in auth) return auth.response;
   const url = new URL(request.url);
   const userId = url.pathname.split("/").slice(-2, -1)[0]; // /admin/users/:id/force-logout
   if (!userId) return json({ error: "Missing user id" }, 400);

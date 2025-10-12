@@ -1,4 +1,5 @@
 import type { Env } from "../../types/Env";
+import { requireAdmin } from "../../middleware/requireAdmin";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json",
@@ -13,8 +14,18 @@ export async function adminAuditHandler(
   env: Env
 ): Promise<Response> {
   const apiKey = request.headers.get("x-api-key") || "";
-  if (!env.WORKER_API_KEY || apiKey !== env.WORKER_API_KEY) {
-    return json({ error: "Unauthorized" }, 401);
+  let authorized = false;
+  // 1) Autoriza por x-api-key (compatibilidade)
+  if (env.WORKER_API_KEY && apiKey === env.WORKER_API_KEY) {
+    authorized = true;
+  }
+  // 2) Se não autorizado por chave, tenta JWT de admin
+  if (!authorized) {
+    const admin = await requireAdmin(request, env);
+    if (!admin.ok) {
+      return admin.response;
+    }
+    authorized = true;
   }
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || "1"));

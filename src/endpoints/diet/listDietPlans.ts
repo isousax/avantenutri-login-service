@@ -26,11 +26,25 @@ export async function listDietPlansHandler(request: Request, env: Env): Promise<
       }
     }
     const queryUser = targetUser && targetUser !== userId ? targetUser : userId;
-    const rows = await env.DB.prepare(`SELECT dp.id, dp.user_id, dp.name, dp.description, dp.status, dp.start_date, dp.end_date, dp.results_summary, dp.current_version_id, dp.created_at, dp.updated_at, dv.data_json as current_data_json
-                                       FROM diet_plans dp
-                                       LEFT JOIN diet_plan_versions dv ON dv.id = dp.current_version_id
-                                       WHERE dp.user_id = ? ${includeArchived ? '' : "AND dp.status = 'active'"}
-                                       ORDER BY dp.created_at DESC`)
+  const rows = await env.DB.prepare(`SELECT dp.id,
+                        dp.user_id,
+                        dp.name,
+                        dp.description,
+                        dp.status,
+                        dp.start_date,
+                        dp.end_date,
+                        dp.results_summary,
+                        dp.current_version_id,
+                        dp.created_at,
+                        dp.updated_at,
+                        dv.data_json as current_data_json,
+                        u.display_name as user_display_name,
+                        u.email as user_email
+                     FROM diet_plans dp
+                     LEFT JOIN diet_plan_versions dv ON dv.id = dp.current_version_id
+                     LEFT JOIN users u ON u.id = dp.user_id
+                     WHERE dp.user_id = ? ${includeArchived ? '' : "AND dp.status = 'active'"}
+                     ORDER BY dp.created_at DESC`)
       .bind(queryUser)
       .all<any>();
     const results = (rows.results || []).map(r => {

@@ -53,11 +53,22 @@ export async function getBlogMediaHandler(request: Request, env: Env): Promise<R
     const idx = url.pathname.indexOf('/blog/media/');
     const sub = url.pathname.slice(idx + '/blog/media/'.length);
     if (!sub) return new Response('Not Found', { status: 404 });
-    const key = `blog/${decodeURIComponent(sub)}`;
-    const obj = await env.R2.get(key);
+  const decoded = decodeURIComponent(sub);
+  const key = decoded.startsWith('blog/') ? decoded : `blog/${decoded}`;
+  const obj = await env.R2.get(key);
     if (!obj) return new Response('Not Found', { status: 404 });
     const ct = obj.httpMetadata?.contentType || 'application/octet-stream';
-    const headers = new Headers({ 'Content-Type': ct, 'Cache-Control': 'public, max-age=31536000, immutable' });
+    const noCache = url.searchParams.has('nocache') || url.searchParams.has('preview');
+    const headers = new Headers({ 'Content-Type': ct });
+    if (noCache) {
+      headers.set('Cache-Control', 'no-store, max-age=0');
+      headers.set('Pragma', 'no-cache');
+    } else {
+      headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+    if (request.method === 'HEAD') {
+      return new Response(null, { status: 200, headers });
+    }
     return new Response(obj.body, { headers });
   } catch {
     return new Response('Internal Error', { status: 500 });
@@ -77,7 +88,9 @@ export async function deleteBlogMediaHandler(request: Request, env: Env): Promis
     const idx = url.pathname.indexOf('/blog/media/');
     const sub = url.pathname.slice(idx + '/blog/media/'.length);
     if (!sub) return json({ error: 'missing_path' }, 400);
-    const key = `blog/${decodeURIComponent(sub)}`;
+  const decoded = decodeURIComponent(sub);
+  const key = decoded.startsWith('blog/') ? decoded : `blog/${decoded}`;
+    const existed = !!(await env.R2.head?.(key));
     await env.R2.delete(key);
     return json({ ok: true, deleted: key });
   } catch (err: any) {

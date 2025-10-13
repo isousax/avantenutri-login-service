@@ -71,5 +71,5 @@ export async function listBlogPostsHandler(request: Request, env: Env): Promise<
   const etag = 'W/"lp:' + etagSeed + '"';
   const ifNone = request.headers.get('if-none-match');
   if (ifNone && ifNone === etag) return new Response(null, { status: 304, headers: { 'ETag': etag } });
-  return new Response(JSON.stringify({ ok: true, page, limit, total, results }), { status: 200, headers: { 'Content-Type': 'application/json', 'ETag': etag, 'Cache-Control': 'public, max-age=60' } });
+  return new Response(JSON.stringify({ ok: true, page, limit, total, results }), { status: 200, headers: { 'Content-Type': 'application/json', 'ETag': etag, 'Cache-Control': 'no-store' } });
 }

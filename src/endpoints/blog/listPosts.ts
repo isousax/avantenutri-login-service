@@ -8,6 +8,7 @@ export async function listBlogPostsHandler(request: Request, env: Env): Promise<
   const search = url.searchParams.get('search')?.trim() || '';
   const category = url.searchParams.get('category')?.trim() || '';
   const tag = url.searchParams.get('tag')?.trim() || '';
+  const status = url.searchParams.get('status')?.trim() || '';
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
   const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '10', 10)));
   const offset = (page - 1) * limit;
@@ -27,7 +28,17 @@ export async function listBlogPostsHandler(request: Request, env: Env): Promise<
 
   const where: string[] = [];
   const params: any[] = [];
-  if (!allowDraft) where.push("status = 'published'"); else where.push("status IN ('draft','published','archived')");
+  // Status filter logic: if not allowed drafts, force published. If allowed, honor provided status when valid.
+  const validStatuses = new Set(['draft','published','archived','all']);
+  if (!allowDraft) {
+    where.push("status = 'published'");
+  } else {
+    if (status && validStatuses.has(status) && status !== 'all') {
+      where.push('status = ?');
+      params.push(status);
+    }
+    // else no status constraint -> includes all statuses
+  }
   if (search) {
     where.push('(title LIKE ? OR content_html LIKE ? OR tags_csv LIKE ?)');
     params.push(`%${search}%`, `%${search}%`, `%${search}%`);

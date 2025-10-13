@@ -35,4 +35,6 @@ export interface Env {
   FRONTEND_URL?: string; // base URL for frontend (e.g., https://avantenutri.com)
   // R2 bucket para armazenar PDFs de dietas
   DIET_FILES?: R2Bucket; // binding opcional - se ausente, PDFs permanecem inline (evitar em produção)
+  // R2 genérico (binding padrão "R2" via wrangler.jsonc) — usado para mídia do blog
+  R2?: R2Bucket;
 }

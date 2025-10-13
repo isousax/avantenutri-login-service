@@ -24,7 +24,7 @@ export async function uploadBlogMediaHandler(request: Request, env: Env): Promis
       const now = new Date();
       const key = `blog/${now.getUTCFullYear()}/${String(now.getUTCMonth()+1).padStart(2,'0')}/${crypto.randomUUID()}.${ext}`;
       await env.R2.put(key, bytes, { httpMetadata: { contentType: file.type || 'application/octet-stream' } });
-      const base = env.SITE_DNS?.replace(/\/$/, '') || '';
+      const base = "https://login-service.avantenutri.workers.dev";
       const url = `${base}/blog/media/${encodeURIComponent(key.replace(/^blog\//,''))}`;
       return json({ ok: true, key, url });
     } else {

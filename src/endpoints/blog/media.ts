@@ -2,6 +2,33 @@ import type { Env } from "../../types/Env";
 import { json } from "./utils";
 import { requireRoles } from "../../middleware/requireRoles";
 
+// Helper: decode repeatedly to handle double-encoding (e.g., %252F -> %2F -> /)
+function decodePathMulti(input: string, max = 5): string {
+  let prev = input;
+  for (let i = 0; i < max; i++) {
+    try {
+      const next = decodeURIComponent(prev);
+      if (next === prev) return next;
+      prev = next;
+    } catch {
+      // If decoding fails at any point, return best-effort current value
+      return prev;
+    }
+  }
+  return prev;
+}
+
+function normalizeBlogKeyFromPathSegment(sub: string): string {
+  // Decode multiple times to collapse %252F -> /
+  let decoded = decodePathMulti(sub);
+  // Normalize leading slashes
+  decoded = decoded.replace(/^\/+/, "");
+  // Ensure blog/ prefix
+  const key = decoded.startsWith("blog/") ? decoded : `blog/${decoded}`;
+  // Collapse any accidental double slashes (except the scheme, which we don't have in keys)
+  return key.replace(/\/+/, "/");
+}
+
 // POST /blog/media (admin/nutri)
 export async function uploadBlogMediaHandler(request: Request, env: Env): Promise<Response> {
   try {
@@ -79,8 +106,7 @@ export async function getBlogMediaHandler(request: Request, env: Env): Promise<R
       return new Response('Not Found', { status: 404 });
     }
 
-    const decoded = decodeURIComponent(sub);
-    const key = decoded.startsWith('blog/') ? decoded : `blog/${decoded}`;
+  const key = normalizeBlogKeyFromPathSegment(sub);
     const obj = await env.R2.get(key);
 
     if (!obj) {
@@ -136,14 +162,13 @@ export async function deleteBlogMediaHandler(request: Request, env: Env): Promis
       return json({ error: 'missing_path' }, 400);
     }
 
-    const decoded = decodeURIComponent(sub);
-    const key = decoded.startsWith('blog/') ? decoded : `blog/${decoded}`;
+    const key = normalizeBlogKeyFromPathSegment(sub);
 
     const existed = !!(await env.R2.head?.(key));
     await env.R2.delete(key);
 
     console.log(`[deleteBlogMediaHandler] Deleted key: ${key}, Previously existed: ${existed}`);
-    return json({ ok: true, deleted: key });
+    return json({ ok: true, deleted: key, existed });
 
   } catch (err: any) {
     console.error("[deleteBlogMediaHandler] Deletion failed:", err?.message);

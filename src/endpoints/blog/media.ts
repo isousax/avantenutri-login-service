@@ -63,3 +63,24 @@ export async function getBlogMediaHandler(request: Request, env: Env): Promise<R
     return new Response('Internal Error', { status: 500 });
   }
 }
+
+// DELETE /blog/media/:path (admin/nutri)
+export async function deleteBlogMediaHandler(request: Request, env: Env): Promise<Response> {
+  try {
+    if (request.method !== 'DELETE') return json({ error: 'Method Not Allowed' }, 405);
+    if (!env.R2) return json({ error: 'Storage unavailable' }, 503);
+    const auth = await requireRoles(request, env, ['admin', 'nutri']);
+    if (!auth.ok) {
+      return (auth as { ok: false; response: Response }).response;
+    }
+    const url = new URL(request.url);
+    const idx = url.pathname.indexOf('/blog/media/');
+    const sub = url.pathname.slice(idx + '/blog/media/'.length);
+    if (!sub) return json({ error: 'missing_path' }, 400);
+    const key = `blog/${decodeURIComponent(sub)}`;
+    await env.R2.delete(key);
+    return json({ ok: true, deleted: key });
+  } catch (err: any) {
+    return json({ error: 'Delete failed', detail: err?.message }, 500);
+  }
+}

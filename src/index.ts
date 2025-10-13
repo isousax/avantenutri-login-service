@@ -91,7 +91,7 @@ import { adminUpdateBlogPostHandler } from "./endpoints/blog/adminUpdatePost";
 import { adminDeleteBlogPostHandler } from "./endpoints/blog/adminDeletePost";
 import { listBlogCategoriesHandler } from "./endpoints/blog/listCategories";
 import { getBlogPostByIdHandler } from "./endpoints/blog/getPostById";
-import { uploadBlogMediaHandler, getBlogMediaHandler } from "./endpoints/blog/media";
+import { uploadBlogMediaHandler, getBlogMediaHandler, deleteBlogMediaHandler } from "./endpoints/blog/media";
 // @ts-ignore resolution hint
 import { buildDynamicSitemap } from "./sitemap/dynamicSitemap";
 import { getDynamicCorsOrigin } from "./utils/getDynamicCorsOrigin";
@@ -129,6 +129,14 @@ export default {
     // Blog media get (public)
     if (request.method === "GET" && url.pathname.startsWith("/blog/media/")) {
       const res = await getBlogMediaHandler(request, env);
+      const origin = request.headers.get("Origin");
+      res.headers.set("Access-Control-Allow-Origin", getDynamicCorsOrigin(origin, env));
+      res.headers.set("X-Request-Id", requestId);
+      return res;
+    }
+    // Blog media delete (admin/nutri)
+    if (request.method === "DELETE" && url.pathname.startsWith("/blog/media/")) {
+      const res = await deleteBlogMediaHandler(request, env);
       const origin = request.headers.get("Origin");
       res.headers.set("Access-Control-Allow-Origin", getDynamicCorsOrigin(origin, env));
       res.headers.set("X-Request-Id", requestId);

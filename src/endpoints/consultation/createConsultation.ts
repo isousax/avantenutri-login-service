@@ -56,7 +56,8 @@ export async function createConsultationHandler(request: Request, env: Env): Pro
   // Exigir crédito para tipos avaliacao_completa / reavaliacao / only_diet ("outro" gratuito por enquanto)
   try {
     if (type === 'avaliacao_completa' || type === 'reavaliacao' || type === 'only_diet') {
-      const credit = await env.DB.prepare('SELECT id, type FROM consultation_credits WHERE user_id = ? AND type = ? AND status = "available" AND locked = 0 ORDER BY created_at ASC LIMIT 1')
+      // Ignora créditos expirados (expires_at passado)
+      const credit = await env.DB.prepare('SELECT id, type, expires_at FROM consultation_credits WHERE user_id = ? AND type = ? AND status = "available" AND locked = 0 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) ORDER BY created_at ASC LIMIT 1')
         .bind(userId, type)
         .first<{ id?: string; type?: string }>();
       if (!credit?.id) return json({ error: 'no_credit', message: 'Crédito de consulta necessário. Realize o pagamento primeiro.' }, 402);

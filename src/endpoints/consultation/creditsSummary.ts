@@ -66,13 +66,20 @@ export async function consultationCreditsSummaryHandler(request: Request, env: E
     // user-level summary: counts by type/status for the authenticated user
     const userId = String(payload.sub);
     const agg = await env.DB.prepare(
-      `SELECT type, status, locked, COUNT(*) as cnt FROM consultation_credits WHERE user_id = ? GROUP BY type, status, locked`
+      `SELECT type,
+        CASE
+          WHEN status = 'available' AND expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP THEN 'expired'
+          ELSE status
+        END AS eff_status,
+        locked,
+        COUNT(*) as cnt
+       FROM consultation_credits WHERE user_id = ? GROUP BY type, eff_status, locked`
     ).bind(userId).all<any>();
     const results = (agg.results || []) as any[];
     const summary: Record<string, { available: number; used: number; expired: number; locked?: number }> = {};
     for (const r of results) {
       const type = String(r.type || 'unknown');
-      const status = String(r.status || 'available');
+      const status = String(r.eff_status || 'available');
       const locked = Number(r.locked || 0) === 1;
       const cnt = Number(r.cnt || 0);
       if (!summary[type]) summary[type] = { available: 0, used: 0, expired: 0 };

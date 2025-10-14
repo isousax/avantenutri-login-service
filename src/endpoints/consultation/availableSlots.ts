@@ -23,14 +23,14 @@ export async function availableConsultationSlotsHandler(request: Request, env: E
     const consultations = (consultationsRows.results || []) as { scheduled_at: string; duration_min: number; }[];
 
     // Build a map per day of generated slots
-    const daySlots: { date: string; slots: { start: string; end: string; taken: boolean; }[] }[] = [];
+  const daySlots: { date: string; slots: { start: string; end: string; taken: boolean; available: boolean; }[] }[] = [];
     const fromDate = new Date(from + 'T00:00:00Z');
     const toDate = new Date(to + 'T00:00:00Z');
     for (let d = new Date(fromDate); d <= toDate; d.setUTCDate(d.getUTCDate() + 1)) {
       const dateStr = d.toISOString().slice(0,10);
       const weekday = d.getUTCDay();
       const applicable = rules.filter(r => r.weekday === weekday);
-      const slots: { start: string; end: string; taken: boolean; }[] = [];
+  const slots: { start: string; end: string; taken: boolean; available: boolean; }[] = [];
       for (const r of applicable) {
         const [sh, sm] = r.start_time.split(':').map(Number);
         const [eh, em] = r.end_time.split(':').map(Number);
@@ -51,7 +51,8 @@ export async function availableConsultationSlotsHandler(request: Request, env: E
             return !(sEnd <= cStart || sStart >= cEnd);
           });
           if (!isBlocked) {
-            slots.push({ start: startIso, end: endIso, taken: isTaken });
+            // Campo 'available' esperado pelo frontend admin: disponível quando não está tomado
+            slots.push({ start: startIso, end: endIso, taken: isTaken, available: !isTaken });
           }
           cursor += slotDur*60000;
         }

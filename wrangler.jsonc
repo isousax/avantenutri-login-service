@@ -17,7 +17,7 @@
 		"ME_CACHE_TTL_MS": 3600,
 		"REFRESH_TOKEN_EXPIRATION_DAYS": 30,
 		"FRONTEND_URL": "https://avantenutri.com.br",
-		"WEBHOOK_URL": "https://webhook-proxy-eosin.com.br/api/mp-proxy-avante-nutri"
+		"WEBHOOK_URL": "https://webhook-proxy-eosin.vercel.app/api/mp-proxy-avante-nutri"
 	},
 	"d1_databases": [
 		{

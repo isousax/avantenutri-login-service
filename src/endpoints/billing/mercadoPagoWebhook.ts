@@ -122,9 +122,21 @@ export async function mercadoPagoWebhookHandler(request: Request, env: Env): Pro
                 .bind(payRow.id)
                 .first<any>();
               if (!existingCredit) {
-                await env.DB.prepare('INSERT INTO consultation_credits (id, user_id, type, status, payment_id) VALUES (?, ?, ?, "available", ?)')
-                  .bind(crypto.randomUUID(), payRow.user_id, payRow.consultation_type, payRow.id)
+                // Sempre cria o crédito principal
+                const mainId = crypto.randomUUID();
+                await env.DB.prepare('INSERT INTO consultation_credits (id, user_id, type, status, payment_id, locked) VALUES (?, ?, ?, "available", ?, 0)')
+                  .bind(mainId, payRow.user_id, payRow.consultation_type, payRow.id)
                   .run();
+                // Se for avaliacao_completa, gerar reavaliacao locked dependente
+                if (payRow.consultation_type === 'avaliacao_completa') {
+                  try {
+                    await env.DB.prepare('INSERT INTO consultation_credits (id, user_id, type, status, payment_id, locked, parent_credit_id) VALUES (?, ?, "reavaliacao", "available", ?, 1, ?)')
+                      .bind(crypto.randomUUID(), payRow.user_id, payRow.id, mainId)
+                      .run();
+                  } catch (err) {
+                    console.error('[mercadoPagoWebhook] Erro ao criar crédito reavaliacao locked', err);
+                  }
+                }
               }
             }
             await env.DB.prepare('UPDATE payments SET processed_at = CURRENT_TIMESTAMP WHERE id = ?')

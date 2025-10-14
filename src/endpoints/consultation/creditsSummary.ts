@@ -66,17 +66,23 @@ export async function consultationCreditsSummaryHandler(request: Request, env: E
     // user-level summary: counts by type/status for the authenticated user
     const userId = String(payload.sub);
     const agg = await env.DB.prepare(
-      `SELECT type, status, COUNT(*) as cnt FROM consultation_credits WHERE user_id = ? GROUP BY type, status`
+      `SELECT type, status, locked, COUNT(*) as cnt FROM consultation_credits WHERE user_id = ? GROUP BY type, status, locked`
     ).bind(userId).all<any>();
     const results = (agg.results || []) as any[];
-    const summary: Record<string, { available: number; used: number; expired: number }> = {};
+    const summary: Record<string, { available: number; used: number; expired: number; locked?: number }> = {};
     for (const r of results) {
       const type = String(r.type || 'unknown');
       const status = String(r.status || 'available');
+      const locked = Number(r.locked || 0) === 1;
       const cnt = Number(r.cnt || 0);
       if (!summary[type]) summary[type] = { available: 0, used: 0, expired: 0 };
-      if (status === 'available') summary[type].available += cnt;
-      else if (status === 'used') summary[type].used += cnt;
+      if (status === 'available') {
+        if (locked) {
+          summary[type].locked = (summary[type].locked || 0) + cnt;
+        } else {
+          summary[type].available += cnt;
+        }
+      } else if (status === 'used') summary[type].used += cnt;
       else if (status === 'expired') summary[type].expired += cnt;
     }
     return json({ ok: true, summary });

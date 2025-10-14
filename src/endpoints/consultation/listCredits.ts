@@ -35,7 +35,7 @@ export async function listConsultationCreditsHandler(request: Request, env: Env)
       binds.push(status);
     }
 
-    const sql = `SELECT id, type, status, payment_id, consultation_id, created_at, used_at, expires_at FROM consultation_credits WHERE ${whereClauses.join(' AND ')} ORDER BY created_at DESC`;
+  const sql = `SELECT id, type, status, payment_id, consultation_id, locked, parent_credit_id, created_at, used_at, expires_at FROM consultation_credits WHERE ${whereClauses.join(' AND ')} ORDER BY created_at DESC`;
     const rows = await env.DB.prepare(sql).bind(...binds).all<any>();
     const results = (rows.results || []) as any[];
     // Map DB row to API shape
@@ -43,6 +43,8 @@ export async function listConsultationCreditsHandler(request: Request, env: Env)
       id: r.id,
       type: r.type,
       status: r.status,
+      locked: r.locked ? true : false,
+      parent_credit_id: r.parent_credit_id || undefined,
       payment_id: r.payment_id || undefined,
       consultation_id: r.consultation_id || undefined,
       created_at: r.created_at,

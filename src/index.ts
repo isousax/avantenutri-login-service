@@ -41,6 +41,7 @@ import { meHandler } from "./endpoints/user/me";
 import { ensureRequestId } from "./middleware/requestId";
 import { introspection } from "./endpoints/auth/introspection";
 import { createConsultationHandler } from "./endpoints/consultation/createConsultation";
+import { completeConsultationHandler } from "./endpoints/consultation/completeConsultation";
 import { listConsultationsHandler } from "./endpoints/consultation/listConsultations";
 import { cancelConsultationHandler } from "./endpoints/consultation/cancelConsultation";
 import {
@@ -393,6 +394,19 @@ export default {
       res.headers.set("Content-Security-Policy", "frame-ancestors 'none';");
       return res;
     }
+    // Complete consultation /consultations/:id/complete
+    if (
+      request.method === 'PATCH' &&
+      /\/consultations\/[A-Za-z0-9-]+\/complete$/.test(url.pathname)
+    ) {
+      const res = await completeConsultationHandler(request, env);
+      const origin = request.headers.get('Origin');
+      res.headers.set('Access-Control-Allow-Origin', getDynamicCorsOrigin(origin, env));
+      res.headers.set('X-Request-Id', requestId);
+      res.headers.set('Content-Security-Policy', "frame-ancestors 'none';");
+      return res;
+    }
+
     // Cancel consultation /consultations/:id/cancel
     if (
       request.method === "PATCH" &&

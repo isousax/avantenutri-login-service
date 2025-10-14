@@ -509,16 +509,20 @@ CREATE TABLE IF NOT EXISTS consultation_credits (
   status TEXT NOT NULL DEFAULT 'available', -- available | used | expired
   payment_id TEXT,
   consultation_id TEXT,
+  locked INTEGER NOT NULL DEFAULT 0, -- 1 = bloqueado (ex: reavaliacao pendente de avaliacao)
+  parent_credit_id TEXT, -- referência ao crédito de avaliacao que gera a reavaliacao
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   used_at TIMESTAMP,
   expires_at TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL,
-  FOREIGN KEY (consultation_id) REFERENCES consultations(id) ON DELETE SET NULL
+  FOREIGN KEY (consultation_id) REFERENCES consultations(id) ON DELETE SET NULL,
+  FOREIGN KEY (parent_credit_id) REFERENCES consultation_credits(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_consultation_credits_user_status ON consultation_credits(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_consultation_credits_payment ON consultation_credits(payment_id);
+CREATE INDEX IF NOT EXISTS idx_consultation_credits_parent ON consultation_credits(parent_credit_id);
 
 -- ===================================================================
 -- CONSULTATION PRICING (dynamic admin-configurable prices)

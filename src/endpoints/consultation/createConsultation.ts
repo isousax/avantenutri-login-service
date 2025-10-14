@@ -23,18 +23,21 @@ export async function createConsultationHandler(request: Request, env: Env): Pro
   const userId = String(payload.sub);
   // Capabilities removidas: todos podem agendar (após questionário completo)
 
-  // Check if questionnaire is complete before allowing consultation booking
+  // Check if questionnaire is complete before allowing consultation booking (unified logic)
   try {
     const questRow = await env.DB.prepare(`SELECT category, answers_json, submitted_at FROM questionnaire_responses WHERE user_id = ?`).bind(userId).first<any>();
-    if (!questRow || !questRow.submitted_at) {
+    if (!questRow) {
       return json({ error: 'questionnaire_required', message: 'Questionário deve ser preenchido antes de agendar consulta' }, 400);
     }
-    // Additional validation for questionnaire completeness
     let answers: Record<string, any> = {};
     try { answers = JSON.parse(questRow.answers_json || '{}'); } catch { answers = {}; }
-    const requiredCommon = ['nome', 'email', 'telefone'];
-    const hasCommon = requiredCommon.every(field => answers[field]?.trim());
-    if (!hasCommon || !questRow.category) {
+    const { isQuestionnaireComplete } = await import('../../utils/questionnaireCompletion');
+    const complete = isQuestionnaireComplete({ category: questRow.category, answers, submitted_at: questRow.submitted_at });
+    if (!complete) {
+      // Distinção: se ainda não submetido, retornar questionnaire_required
+      if (!questRow.submitted_at) {
+        return json({ error: 'questionnaire_required', message: 'Questionário deve ser preenchido antes de agendar consulta' }, 400);
+      }
       return json({ error: 'questionnaire_incomplete', message: 'Questionário incompleto. Complete todas as informações obrigatórias.' }, 400);
     }
   } catch (e: any) {

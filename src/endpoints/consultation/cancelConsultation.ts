@@ -25,6 +25,16 @@ export async function cancelConsultationHandler(request: Request, env: Env): Pro
     await env.DB.prepare(`UPDATE consultations SET status = 'canceled', canceled_at = CURRENT_TIMESTAMP, canceled_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`)
       .bind(reason, id, userId)
       .run();
+    // Tentar devolver crédito associado (se houver)
+    try {
+      const credit = await env.DB.prepare(`SELECT id, status FROM consultation_credits WHERE consultation_id = ? LIMIT 1`).bind(id).first<{ id?: string; status?: string }>();
+      if (credit?.id && credit.status === 'used') {
+        await env.DB.prepare(`UPDATE consultation_credits SET status = 'available', used_at = NULL, consultation_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(credit.id).run();
+      }
+    } catch (e) {
+      // Não falhar cancelamento por erro ao devolver crédito, apenas logar
+      console.error('[cancelConsultation] Falha ao devolver crédito da consulta', id, e);
+    }
     return json({ ok: true });
   } catch (e:any) {
     return json({ error: 'Internal Error' }, 500);

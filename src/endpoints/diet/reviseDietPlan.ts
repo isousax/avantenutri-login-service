@@ -43,12 +43,12 @@ export async function reviseDietPlanHandler(request: Request, env: Env): Promise
     // Count revisions (versions beyond #1) this month
     // Antes: contagem vs limite de revisões — agora ignorado
 
-    // Get latest version number
-    const lastV = await env.DB.prepare('SELECT version_number, data_json FROM diet_plan_versions WHERE id = ?')
-      .bind(existingPlan.current_version_id)
+    // Obter última versão REAL pelo maior version_number para evitar colisões se current_version_id for desatualizado
+    const lastV = await env.DB.prepare('SELECT version_number, data_json FROM diet_plan_versions WHERE plan_id = ? ORDER BY version_number DESC LIMIT 1')
+      .bind(planId)
       .first<{ version_number?: number; data_json?: string }>();
-    const nextNumber = (lastV?.version_number || 0) + 1;
-  let baseData: any = {}; try { baseData = JSON.parse(lastV?.data_json || '{}'); } catch { baseData = {}; }
+    let nextNumber = (lastV?.version_number || 0) + 1;
+    let baseData: any = {}; try { baseData = JSON.parse(lastV?.data_json || '{}'); } catch { baseData = {}; }
   // Se "data" foi enviado, tratamos como substituição completa; senão aplicamos patch sobre a versão atual
   let merged: any = (data && typeof data === 'object') ? data : { ...baseData, ...(dataPatch || {}) };
   const fileSource: any = (data && typeof data === 'object') ? data : (dataPatch || {});
@@ -79,9 +79,28 @@ export async function reviseDietPlanHandler(request: Request, env: Env): Promise
     }
     const newVid = crypto.randomUUID();
 
-    await env.DB.prepare('INSERT INTO diet_plan_versions (id, plan_id, version_number, generated_by, data_json, notes) VALUES (?, ?, ?, "user", ?, ?)')
-      .bind(newVid, planId, nextNumber, JSON.stringify(merged), notes || null)
-      .run();
+    // Inserção com retry rápido em caso de corrida (UNIQUE constraint)
+    let inserted = false;
+    for (let attempt = 0; attempt < 3 && !inserted; attempt++) {
+      try {
+        await env.DB.prepare('INSERT INTO diet_plan_versions (id, plan_id, version_number, generated_by, data_json, notes) VALUES (?, ?, ?, "user", ?, ?)')
+          .bind(newVid, planId, nextNumber, JSON.stringify(merged), notes || null)
+          .run();
+        inserted = true;
+      } catch (err: any) {
+        const msg = String(err?.message || err || '').toLowerCase();
+        if (msg.includes('unique') && msg.includes('version_number')) {
+          // Recalcula nextNumber e tenta de novo
+            const latestRow = await env.DB.prepare('SELECT version_number FROM diet_plan_versions WHERE plan_id = ? ORDER BY version_number DESC LIMIT 1')
+              .bind(planId)
+              .first<{ version_number?: number }>();
+            nextNumber = ((latestRow?.version_number) || nextNumber) + 1;
+            continue;
+        }
+        throw err;
+      }
+    }
+    if (!inserted) return json({ error: 'Falha ao gerar versão (concurrency)' }, 409);
     await env.DB.prepare('UPDATE diet_plans SET current_version_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .bind(newVid, planId)
       .run();

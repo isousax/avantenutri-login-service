@@ -43,6 +43,7 @@ import { introspection } from "./endpoints/auth/introspection";
 import { createConsultationHandler } from "./endpoints/consultation/createConsultation";
 import { completeConsultationHandler } from "./endpoints/consultation/completeConsultation";
 import { adminCompleteConsultationHandler } from './endpoints/admin/adminCompleteConsultation';
+import { adminCancelConsultationHandler } from './endpoints/admin/adminCancelConsultation';
 import { listConsultationsHandler } from "./endpoints/consultation/listConsultations";
 import { cancelConsultationHandler } from "./endpoints/consultation/cancelConsultation";
 import {
@@ -122,6 +123,15 @@ export default {
     // Admin complete consultation
     if (request.method === 'PATCH' && /\/admin\/consultations\/[A-Za-z0-9-]+\/complete$/.test(url.pathname)) {
       const res = await adminCompleteConsultationHandler(request, env);
+      const origin = request.headers.get('Origin');
+      res.headers.set('Access-Control-Allow-Origin', getDynamicCorsOrigin(origin, env));
+      res.headers.set('X-Request-Id', requestId);
+      res.headers.set('Content-Security-Policy', "frame-ancestors 'none';");
+      return res;
+    }
+    // Admin cancel consultation
+    if (request.method === 'PATCH' && /\/admin\/consultations\/[A-Za-z0-9-]+\/cancel$/.test(url.pathname)) {
+      const res = await adminCancelConsultationHandler(request, env);
       const origin = request.headers.get('Origin');
       res.headers.set('Access-Control-Allow-Origin', getDynamicCorsOrigin(origin, env));
       res.headers.set('X-Request-Id', requestId);

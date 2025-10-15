@@ -60,17 +60,38 @@ export async function revokeSessionById(db: D1Database, sessionId: string) {
     .run();
 }
 
+// (Mantido apenas a versão com trava otimista abaixo)
+
+export class OptimisticLockError extends Error {
+  code = "SESSION_CONFLICT" as const;
+  constructor(message = "Session optimistic lock failed") {
+    super(message);
+    this.name = "OptimisticLockError";
+  }
+}
+
+// New signature with optimistic locking: requires current plain token
 export async function rotateSession(
   db: D1Database,
   sessionId: string,
+  currentPlainToken: string,
   newPlainToken: string,
   newExpiresAtISO: string
 ) {
+  const currentHashed = await hashToken(currentPlainToken);
   const newHashed = await hashToken(newPlainToken);
-  await db
+  const result = await db
     .prepare(
-      `UPDATE user_sessions SET refresh_token = ?, expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+      `UPDATE user_sessions
+         SET refresh_token = ?, expires_at = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND refresh_token = ? AND revoked = FALSE`
     )
-    .bind(newHashed, newExpiresAtISO, sessionId)
+    .bind(newHashed, newExpiresAtISO, sessionId, currentHashed)
     .run();
+
+  const changes = (result as any)?.changes ?? (result as any)?.meta?.changes ?? 0;
+  if (!changes || changes === 0) {
+    // another concurrent request likely rotated first
+    throw new OptimisticLockError();
+  }
 }

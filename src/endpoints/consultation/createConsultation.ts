@@ -56,6 +56,42 @@ export async function createConsultationHandler(request: Request, env: Env): Pro
   const allowedTypes = ['avaliacao_completa','reavaliacao','outro','only_diet'];
   if (!allowedTypes.includes(type)) return json({ error: 'invalid_type' }, 400);
 
+  // Regra de negócio: Reavaliação apenas se houve consulta concluída nos últimos 12 meses
+  // OU reavaliação concluída nos últimos 6 meses
+  if (type === 'reavaliacao') {
+    try {
+      const anyRecent = await env.DB
+        .prepare(
+          `SELECT 1 as ok FROM consultations 
+           WHERE user_id = ? AND status = 'completed' 
+             AND scheduled_at >= datetime('now','-12 months') 
+           LIMIT 1`
+        )
+        .bind(userId)
+        .first<{ ok?: number }>();
+
+      let eligible = !!anyRecent?.ok;
+      if (!eligible) {
+        const recentReav = await env.DB
+          .prepare(
+            `SELECT 1 as ok FROM consultations 
+             WHERE user_id = ? AND status = 'completed' AND type = 'reavaliacao'
+               AND scheduled_at >= datetime('now','-6 months') 
+             LIMIT 1`
+          )
+          .bind(userId)
+          .first<{ ok?: number }>();
+        eligible = !!recentReav?.ok;
+      }
+      if (!eligible) {
+        return json({ error: 'reavaliacao_not_allowed', message: 'Reavaliação permitida somente para quem teve consulta concluída nos últimos 12 meses ou reavaliação nos últimos 6 meses.' }, 400);
+      }
+    } catch (e) {
+      console.error('[createConsultation] Failed reavaliacao eligibility check', e);
+      return json({ error: 'eligibility_check_failed' }, 500);
+    }
+  }
+
   // Exigir crédito para tipos avaliacao_completa / reavaliacao / only_diet ("outro" gratuito por enquanto)
   try {
     if (type === 'avaliacao_completa' || type === 'reavaliacao' || type === 'only_diet') {

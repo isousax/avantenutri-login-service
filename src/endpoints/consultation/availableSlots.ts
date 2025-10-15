@@ -13,6 +13,8 @@ export async function availableConsultationSlotsHandler(request: Request, env: E
   if (!from || !to) return json({ error: 'missing_range' }, 400);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return json({ error: 'invalid_date' }, 400);
   if (from > to) return json({ error: 'invalid_range' }, 400);
+  const tzOffsetMin = Number(env.BUSINESS_TZ_OFFSET_MINUTES ?? -180);
+  const offsetMs = tzOffsetMin * 60000;
   try {
     const rulesRows = await env.DB.prepare(`SELECT * FROM consultation_availability_rules WHERE active = 1`).all();
     const rules = (rulesRows.results || []) as any[];
@@ -23,23 +25,27 @@ export async function availableConsultationSlotsHandler(request: Request, env: E
     const consultations = (consultationsRows.results || []) as { scheduled_at: string; duration_min: number; }[];
 
     // Build a map per day of generated slots
-  const daySlots: { date: string; slots: { start: string; end: string; taken: boolean; available: boolean; }[] }[] = [];
-    const fromDate = new Date(from + 'T00:00:00Z');
-    const toDate = new Date(to + 'T00:00:00Z');
-    for (let d = new Date(fromDate); d <= toDate; d.setUTCDate(d.getUTCDate() + 1)) {
-      const dateStr = d.toISOString().slice(0,10);
-      const weekday = d.getUTCDay();
+    const daySlots: { date: string; slots: { start: string; end: string; taken: boolean; available: boolean; }[] }[] = [];
+    const fromLocal = new Date(from + 'T00:00:00Z'); // provisional
+    const toLocal = new Date(to + 'T00:00:00Z');
+    // Calcular início local em UTC ajustando pelo offset
+    let curLocalUtc = Date.UTC(fromLocal.getUTCFullYear(), fromLocal.getUTCMonth(), fromLocal.getUTCDate(), 0, 0) - offsetMs;
+    const endLocalUtc = Date.UTC(toLocal.getUTCFullYear(), toLocal.getUTCMonth(), toLocal.getUTCDate(), 0, 0) - offsetMs;
+    for (; curLocalUtc <= endLocalUtc; curLocalUtc += 24 * 60 * 60 * 1000) {
+      const localDate = new Date(curLocalUtc + offsetMs);
+      const dateStr = localDate.toISOString().slice(0,10);
+      const weekday = localDate.getUTCDay();
       const applicable = rules.filter(r => r.weekday === weekday);
-  const slots: { start: string; end: string; taken: boolean; available: boolean; }[] = [];
+      const slots: { start: string; end: string; taken: boolean; available: boolean; }[] = [];
       for (const r of applicable) {
         const [sh, sm] = r.start_time.split(':').map(Number);
         const [eh, em] = r.end_time.split(':').map(Number);
-        const slotDur = r.slot_duration_min;
-        let cursor = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), sh, sm, 0);
-        const endBoundary = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), eh, em, 0);
-        while (cursor + slotDur*60000 <= endBoundary) {
-          const startIso = new Date(cursor).toISOString();
-            const endIso = new Date(cursor + slotDur*60000).toISOString();
+        const slotDur = Number(r.slot_duration_min) || 40;
+        let cursorUtc = curLocalUtc + (sh * 60 + sm) * 60000; // início local convertido para UTC
+        const endBoundaryUtc = curLocalUtc + (eh * 60 + em) * 60000;
+        while (cursorUtc + slotDur * 60000 <= endBoundaryUtc) {
+          const startIso = new Date(cursorUtc).toISOString();
+          const endIso = new Date(cursorUtc + slotDur * 60000).toISOString();
           // Check blocked
           const isBlocked = blocked.some(b => !(endIso <= b.slot_start || startIso >= b.slot_end));
           // Check taken
@@ -54,7 +60,7 @@ export async function availableConsultationSlotsHandler(request: Request, env: E
             // Campo 'available' esperado pelo frontend admin: disponível quando não está tomado
             slots.push({ start: startIso, end: endIso, taken: isTaken, available: !isTaken });
           }
-          cursor += slotDur*60000;
+          cursorUtc += slotDur*60000;
         }
       }
       daySlots.push({ date: dateStr, slots });

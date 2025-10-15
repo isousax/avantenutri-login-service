@@ -37,4 +37,6 @@ export interface Env {
   DIET_FILES?: R2Bucket; // binding opcional - se ausente, PDFs permanecem inline (evitar em produção)
   // R2 genérico (binding padrão "R2" via wrangler.jsonc) — usado para mídia do blog
   R2?: R2Bucket;
+  // Timezone offset do negócio em minutos (ex.: -180 para GMT-3)
+  BUSINESS_TZ_OFFSET_MINUTES?: string;
 }

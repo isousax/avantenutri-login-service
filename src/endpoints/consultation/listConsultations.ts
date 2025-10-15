@@ -29,7 +29,16 @@ export async function listConsultationsHandler(request: Request, env: Env): Prom
   if (to) { clauses.push(`date(scheduled_at) <= ?`); values.push(to); }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   try {
-    const rows = await env.DB.prepare(`SELECT id, type, status, scheduled_at, duration_min, urgency, notes, created_at, updated_at FROM consultations ${where} ORDER BY scheduled_at ASC LIMIT 200`)
+    // Ordenação: futuras primeiro (mais próximas -> mais distantes), depois passadas (mais recentes -> mais antigas)
+    const rows = await env.DB.prepare(
+      `SELECT id, type, status, scheduled_at, duration_min, notes, created_at, updated_at
+       FROM consultations ${where}
+       ORDER BY
+         (datetime(scheduled_at) >= datetime('now')) DESC,
+         CASE WHEN datetime(scheduled_at) >= datetime('now') THEN datetime(scheduled_at) END ASC,
+         CASE WHEN datetime(scheduled_at) < datetime('now') THEN datetime(scheduled_at) END DESC
+       LIMIT 20`
+    )
       .bind(...values)
       .all();
     return json({ ok: true, results: rows.results || [] });

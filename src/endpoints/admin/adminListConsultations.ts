@@ -24,16 +24,30 @@ export async function adminListConsultationsHandler(request: Request, env: Env):
   if (from && to && from > to) return json({ error: 'intervalo inválido' }, 400);
   const clauses: string[] = [];
   const values: any[] = [];
-  if (status) { clauses.push('status = ?'); values.push(status); }
-  if (userId) { clauses.push('user_id = ?'); values.push(userId); }
-  if (from) { clauses.push(`date(scheduled_at) >= ?`); values.push(from); }
-  if (to) { clauses.push(`date(scheduled_at) <= ?`); values.push(to); }
+  if (status) { clauses.push('c.status = ?'); values.push(status); }
+  if (userId) { clauses.push('c.user_id = ?'); values.push(userId); }
+  if (from) { clauses.push(`date(c.scheduled_at) >= ?`); values.push(from); }
+  if (to) { clauses.push(`date(c.scheduled_at) <= ?`); values.push(to); }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   try {
-    const totalRow = await env.DB.prepare(`SELECT COUNT(*) as c FROM consultations ${where}`)
+    const totalRow = await env.DB.prepare(`SELECT COUNT(*) as c FROM consultations c ${where}`)
       .bind(...values)
       .first<{ c: number }>();
-    const rows = await env.DB.prepare(`SELECT id, user_id, type, status, scheduled_at, duration_min, urgency, notes, created_at, updated_at FROM consultations ${where} ORDER BY scheduled_at DESC LIMIT ? OFFSET ?`)
+    const rows = await env.DB.prepare(
+      `SELECT c.id, c.user_id, c.type, c.status, c.scheduled_at, c.duration_min, c.notes,
+              c.created_at, c.updated_at,
+              u.email AS user_email,
+              COALESCE(u.display_name, p.full_name, u.email) AS user_display_name
+       FROM consultations c
+       LEFT JOIN users u ON u.id = c.user_id
+       LEFT JOIN user_profiles p ON p.user_id = c.user_id
+       ${where}
+       ORDER BY
+         (datetime(c.scheduled_at) >= datetime('now')) DESC,
+         CASE WHEN datetime(c.scheduled_at) >= datetime('now') THEN datetime(c.scheduled_at) END ASC,
+         CASE WHEN datetime(c.scheduled_at) < datetime('now') THEN datetime(c.scheduled_at) END DESC
+       LIMIT ? OFFSET ?`
+    )
       .bind(...values, pageSize, offset)
       .all();
     return json({ ok: true, page, pageSize, total: totalRow?.c || 0, results: rows.results || [] });

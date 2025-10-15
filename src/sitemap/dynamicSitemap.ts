@@ -26,6 +26,7 @@ const STATIC_ROUTES: StaticRoute[] = [
   { path: '/login', changefreq: 'monthly', priority: 0.2 },
   { path: '/register', changefreq: 'monthly', priority: 0.2 },
   { path: '/recuperar-senha', changefreq: 'monthly', priority: 0.1 },
+  { path: '/verify-email', changefreq: 'monthly', priority: 0.1 },
   { path: '/agendar-consulta', changefreq: 'monthly', priority: 0.5 },
 ];
 

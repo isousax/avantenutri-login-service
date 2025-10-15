@@ -22,6 +22,16 @@ export async function cancelConsultationHandler(request: Request, env: Env): Pro
     const existing = await env.DB.prepare(`SELECT id, user_id, status, scheduled_at FROM consultations WHERE id = ? AND user_id = ?`).bind(id, userId).first<any>();
     if (!existing) return json({ error: 'Not Found' }, 404);
     if (existing.status !== 'scheduled') return json({ error: 'invalid_state' }, 400);
+    // Bloqueia cancelamento nas últimas 48h antes do horário agendado
+    try {
+      const sched = new Date(existing.scheduled_at);
+      if (!Number.isNaN(sched.getTime())) {
+        const msLeft = sched.getTime() - Date.now();
+        if (msLeft <= 48 * 60 * 60 * 1000) {
+          return json({ error: 'cancellation_window' }, 422);
+        }
+      }
+    } catch {}
     await env.DB.prepare(`UPDATE consultations SET status = 'canceled', canceled_at = CURRENT_TIMESTAMP, canceled_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`)
       .bind(reason, id, userId)
       .run();

@@ -26,16 +26,6 @@ const STATIC_ROUTES: StaticRoute[] = [
   { path: '/login', changefreq: 'monthly', priority: 0.2 },
   { path: '/register', changefreq: 'monthly', priority: 0.2 },
   { path: '/recuperar-senha', changefreq: 'monthly', priority: 0.1 },
-  { path: '/redefinir-senha', changefreq: 'monthly', priority: 0.1 },
-  { path: '/verify-email', changefreq: 'monthly', priority: 0.1 },
-  { path: '/confirm-email', changefreq: 'monthly', priority: 0.1 },
-  { path: '/dashboard', changefreq: 'weekly', priority: 0.3 },
-  { path: '/questionario', changefreq: 'monthly', priority: 0.3 },
-  { path: '/billing/historico', changefreq: 'monthly', priority: 0.1 },
-  { path: '/registro-refeicao', changefreq: 'daily', priority: 0.2 },
-  { path: '/registro-peso', changefreq: 'daily', priority: 0.2 },
-  { path: '/registro-agua', changefreq: 'daily', priority: 0.2 },
-  { path: '/agendar-consulta', changefreq: 'monthly', priority: 0.5 },
 ];
 
 function esc(str: string = ''): string {

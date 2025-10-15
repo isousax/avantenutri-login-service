@@ -27,14 +27,16 @@ export async function billingIntentHandler(request: Request, env: Env): Promise<
   const type = body.type;
   if (!['avaliacao_completa','reavaliacao'].includes(type)) return json({ error: 'invalid_type' }, 400);
 
-  // Elegibilidade para reavaliacao: (1) qualquer consulta nos últimos 12m OU (2) reavaliacao nos últimos 6m
+  // Elegibilidade para reavaliacao: (1) qualquer consulta concluída nos últimos 12m OU (2) reavaliacao concluída nos últimos 6m
   if (type === 'reavaliacao') {
     try {
-      const recentAny = await env.DB.prepare(`SELECT id FROM consultations WHERE user_id = ? AND created_at >= datetime('now', '-365 days') LIMIT 1`)
+      const recentAny = await env.DB.prepare(`SELECT id FROM consultations WHERE user_id = ? AND status = 'completed' AND scheduled_at >= datetime('now', '-12 months') LIMIT 1`)
         .bind(String(payload.sub)).first<any>();
-      const recentReav = await env.DB.prepare(`SELECT id FROM consultations WHERE user_id = ? AND type = 'reavaliacao' AND created_at >= datetime('now','-180 days') LIMIT 1`)
+      const recentReav = await env.DB.prepare(`SELECT id FROM consultations WHERE user_id = ? AND status = 'completed' AND type = 'reavaliacao' AND scheduled_at >= datetime('now','-6 months') LIMIT 1`)
         .bind(String(payload.sub)).first<any>();
-      if (!recentAny && !recentReav) return json({ error: 'reavaliacao_not_allowed' }, 400);
+      if (!recentAny && !recentReav) {
+        return json({ error: 'reavaliacao_not_allowed', message: 'Reavaliação permitida somente para quem teve consulta concluída nos últimos 12 meses ou reavaliação nos últimos 6 meses.' }, 400);
+      }
     } catch (e) {
       console.warn('[billingIntent] elegibilidade reavaliacao falhou', e);
       return json({ error: 'eligibility_check_failed' }, 500);

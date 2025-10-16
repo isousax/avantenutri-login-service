@@ -30,6 +30,25 @@ function presentationalToClasses(tag: string, attrs: Record<string,string>): str
   else if (align === 'left') classes.push('text-left');
   else if (align === 'justify') classes.push('text-justify');
 
+  // style-based text-align and font-size to classes (safe mapping)
+  const style = (attrs['style'] || '').toLowerCase();
+  if (style) {
+    // text-align
+    if (style.includes('text-align')) {
+      if (style.includes('text-align: center')) classes.push('text-center');
+      else if (style.includes('text-align: right')) classes.push('text-right');
+      else if (style.includes('text-align: left')) classes.push('text-left');
+      else if (style.includes('text-align: justify')) classes.push('text-justify');
+    }
+    // font-size: Npx
+    const m = style.match(/font-size\s*:\s*(\d+)px/);
+    if (m) {
+      const n = parseInt(m[1] || '16', 10) || 16;
+      const sizeCls = n <= 12 ? 'text-xs' : n <= 14 ? 'text-sm' : n <= 16 ? 'text-base' : n <= 18 ? 'text-lg' : n <= 20 ? 'text-xl' : n <= 24 ? 'text-2xl' : n <= 30 ? 'text-3xl' : n <= 36 ? 'text-4xl' : 'text-5xl';
+      classes.push(sizeCls);
+    }
+  }
+
   // width/height percentage on images -> block + mx-auto when centered widths
   if (tag === 'img') {
     const w = (attrs['width'] || '').toLowerCase();
@@ -57,8 +76,9 @@ function sanitizeAttributes(tag: string, rawAttrs: string): string {
         value = value.slice(1,-1);
       }
     }
-    // drop event handlers & style & data attributes not whitelisted
-    if(name.startsWith('on') || name === 'style') continue;
+    // drop event handlers; keep 'style' in attrsMap for mapping, but do not output it later
+    if(name.startsWith('on')) continue;
+    if(name === 'style') { attrsMap['style'] = value; continue; }
     attrsMap[name] = value;
     const allowedForTag = TAG_ATTR[tag] || new Set();
     if(!(GLOBAL_ALLOWED_ATTR.has(name) || allowedForTag.has(name))) continue;

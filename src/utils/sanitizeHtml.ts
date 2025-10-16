@@ -21,9 +21,31 @@ const TAG_ATTR: Record<string, Set<string>> = {
   pre: new Set(['data-lang'])
 };
 
+function presentationalToClasses(tag: string, attrs: Record<string,string>): string[] {
+  const classes: string[] = [];
+  // align attribute to text alignment
+  const align = (attrs['align'] || '').toLowerCase();
+  if (align === 'center') classes.push('text-center');
+  else if (align === 'right') classes.push('text-right');
+  else if (align === 'left') classes.push('text-left');
+  else if (align === 'justify') classes.push('text-justify');
+
+  // width/height percentage on images -> block + mx-auto when centered widths
+  if (tag === 'img') {
+    const w = (attrs['width'] || '').toLowerCase();
+    if (w.endsWith('%')) {
+      // browsers set width attr as number, but if % appears, center by default
+      classes.push('block','mx-auto');
+    }
+  }
+
+  return classes;
+}
+
 function sanitizeAttributes(tag: string, rawAttrs: string): string {
   if(!rawAttrs) return '';
   const attrs: string[] = [];
+  const attrsMap: Record<string,string> = {};
   const attrRegex = /(\w[\w:-]*)(\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+))?/g; // basic attribute capture
   let m: RegExpExecArray | null;
   while((m = attrRegex.exec(rawAttrs))){
@@ -37,6 +59,7 @@ function sanitizeAttributes(tag: string, rawAttrs: string): string {
     }
     // drop event handlers & style & data attributes not whitelisted
     if(name.startsWith('on') || name === 'style') continue;
+    attrsMap[name] = value;
     const allowedForTag = TAG_ATTR[tag] || new Set();
     if(!(GLOBAL_ALLOWED_ATTR.has(name) || allowedForTag.has(name))) continue;
     if(name === 'href'){
@@ -56,6 +79,19 @@ function sanitizeAttributes(tag: string, rawAttrs: string): string {
     // basic escaping of quotes & ampersands
     const safeValue = value.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     attrs.push(`${name}="${safeValue}"`);
+  }
+  // translate presentational attributes to Tailwind classes
+  const extraClasses = presentationalToClasses(tag, attrsMap);
+  if (extraClasses.length) {
+    const existingClass = attrsMap['class'] || '';
+    const set = new Set(
+      (existingClass.split(/\s+/).filter(Boolean) as string[]).concat(extraClasses)
+    );
+    const merged = Array.from(set).join(' ');
+    // replace existing class or append new
+    const idx = attrs.findIndex(a => /^class=/.test(a));
+    const safeValue = merged.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    if (idx >= 0) attrs[idx] = `class="${safeValue}"`; else attrs.push(`class="${safeValue}"`);
   }
   // ensure rel noopener
   if(tag === 'a'){
